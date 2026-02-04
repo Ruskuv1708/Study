@@ -1,0 +1,49 @@
+from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
+from system_core.database_connector import get_db
+from system_core.context import get_current_workspace_id
+from business_modules.module_access_control.access_security import get_current_user
+from business_modules.module_reports.report_service import ReportService
+
+router = APIRouter(prefix="/reports", tags=["Reporting Engine"])
+
+@router.get("/requests/excel")
+def download_requests_report(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """ Download all requests as .xlsx """
+    workspace_id = get_current_workspace_id()
+    
+    # 1. Generate the Excel binary data
+    file_stream = ReportService.generate_requests_excel(db, workspace_id)
+    
+    # 2. Return as a Stream
+    # Headers tell the browser this is an attachment to download
+    headers = {
+        "Content-Disposition": 'attachment; filename="requests_report.xlsx"'
+    }
+    
+    return StreamingResponse(
+        file_stream, 
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers
+    )
+
+@router.get("/users/excel")
+def download_users_report(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """ Download employee list """
+    workspace_id = get_current_workspace_id()
+    file_stream = ReportService.generate_users_excel(db, workspace_id)
+    
+    return StreamingResponse(
+        file_stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="employees.xlsx"'}
+    )
+    
