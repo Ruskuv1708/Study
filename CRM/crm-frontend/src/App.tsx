@@ -6,6 +6,8 @@ import RequestsPage from './modules/requests/RequestsPage'
 import DepartmentsPage from './modules/requests/DepartmentsPage'
 import AdminPanel from './pages/AdminPanel'              // ✅ Updated path
 import SuperadminPanel from './pages/SuperadminPanel'    // ✅ Updated path
+import RequestDetailsPage from './modules/requests/RequestDeteailsPage' // ✅ Added import for RequestDetailsPage
+
 
 function App() {
   return (
@@ -18,6 +20,7 @@ function App() {
         <Route path="/departments" element={<DepartmentsPage />} />
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/superadmin" element={<SuperadminPanel />} />
+        <Route path="/requests/:id" element={<RequestDetailsPage />} /> {/* ✅ Added route for RequestDetailsPage */}
       </Routes>
     </BrowserRouter>
   )

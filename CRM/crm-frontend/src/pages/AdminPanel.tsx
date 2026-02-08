@@ -37,7 +37,7 @@ function AdminPanel() {
   useEffect(() => {
     const token = localStorage.getItem('crm_token')
     if (!token) {
-      navigate('/login')
+      navigate('/')
       return
     }
 
@@ -59,7 +59,7 @@ function AdminPanel() {
       
       // Load tenants if superadmin
       if (res.data.role === 'superadmin') {
-        return axios.get('http://127.0.0.1:8000/superadmin/tenants', {
+        return axios.get('http://127.0.0.1:8000/superadmin/workspaces', {
           headers: { Authorization: `Bearer ${token}` }
         })
       }

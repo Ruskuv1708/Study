@@ -13,6 +13,7 @@ class PermissionService:
             "edit_user",
             "delete_user",
             "manage_roles",
+            "assign_departments",
             "create_workspace",
             "edit_workspace",
             "delete_workspace",
@@ -34,6 +35,7 @@ class PermissionService:
             "edit_user",  # Only lower-ranked users
             "create_department",
             "edit_department",
+            "assign_departments",
             "create_request",
             "edit_request",
             "assign_request",

@@ -16,7 +16,7 @@ from business_modules.module_superadmin.superadmin_schemas import (
 )
 from business_modules.module_superadmin.superadmin_service import SuperadminService
 
-# Setup logging for security events
+# Настройка логгирования
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
@@ -30,37 +30,28 @@ router = APIRouter(
 
 def require_superadmin_access(func):
     """
-    Decorator to ensure only superadmin can access endpoint
-    Logs all access attempts
+    Декора́тор для гарантии доступа только суперадминистратора
     """
     async def wrapper(
         *args,
-        current_user = Depends(get_current_user),
+        current_user=Depends(get_current_user),
         **kwargs
     ):
-        # Check role
         if current_user.role != UserRole.SUPERADMIN:
-            # Log failed attempt
             logger.warning(
-                f"🚨 SECURITY ALERT: Unauthorized superadmin access attempt\n"
-                f"   User: {current_user.email}\n"
-                f"   Role: {current_user.role}\n"
-                f"   Timestamp: {datetime.utcnow()}"
+                f"🚨 SECURITY ALERT: Несанкционированная попытка доступа суперадмина.\n"
+                f"   Пользователь: {current_user.email}\n"
+                f"   Роль: {current_user.role}\n"
+                f"   Время: {datetime.utcnow()}"
             )
             raise HTTPException(
                 status_code=403,
-                detail="Access denied: Superadmin privileges required"
+                detail="Доступ запрещен: требуются привилегии суперадмина"
             )
-        
-        # Log successful access
         logger.info(
-            f"✅ Superadmin access - User: {current_user.email} - "
-            f"Endpoint: {func.__name__}"
+            f"✅ Доступ суперадмина - Пользователь: {current_user.email} - Метод: {func.__name__}"
         )
-        
-        # Call the actual function
         return await func(*args, current_user=current_user, **kwargs)
-    
     return wrapper
 
 # ========================================
@@ -71,79 +62,53 @@ def require_superadmin_access(func):
 async def create_workspace(
     data: WorkspaceCreateSchema,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     """
-    Create a new workspace (Superadmin only)
-    
-    Protection:
-    - JWT token validation
-    - Role check (SUPERADMIN only)
-    - Audit logging
+    Создание новой рабочей области (только для суперадмина)
     """
-    # Double-check superadmin role
     PermissionService.require_role(current_user, UserRole.SUPERADMIN)
-    
     try:
-        result = SuperadminService.create_workspace(
-            db,
-            data.workspace_name,
-            data.workspace_subdomain,
-            data.admin_full_name,
-            data.admin_email,
-            data.admin_password
-        )
+        result = SuperadminService.create_workspace(db, data)
         
-        # Audit log
         logger.info(
-            f"✅ AUDIT: Workspace created by {current_user.email}\n"
-            f"   Workspace: {data.workspace_name}\n"
-            f"   Subdomain: {data.workspace_subdomain}\n"
-            f"   Timestamp: {datetime.utcnow()}"
+            f"✅ AUDIT: Рабочая область создана пользователем {current_user.email}\n"
+            f"   Название: {data.workspace_name}\n"
+            f"   Субдомен: {data.subdomain_prefix}\n"
+            f"   Время: {datetime.utcnow()}"
         )
-        
         return result
-        
     except Exception as e:
-        logger.error(f"❌ Error creating workspace: {e}")
+        logger.error(f"❌ Ошибка при создании рабочей области: {e}")
         raise
 
-@router.get("/workspaces", response_model=List[WorkspaceResponseSchema]) # <--- CHANGE THIS
+@router.get("/workspaces", response_model=List[WorkspaceResponseSchema])
 async def list_workspaces(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     """
-    List all workspaces (Superadmin only)
+    Список всех рабочих областей (только для суперадмина)
     """
     PermissionService.require_role(current_user, UserRole.SUPERADMIN)
-    
-    logger.info(f"✅ Workspaces listed by {current_user.email}")
-    
-    # This returns SQLAlchemy objects, but FastAPI will now use 
-    # WorkspaceResponseSchema to convert them automatically.
+    logger.info(f"✅ Получение списка рабочих областей пользователем {current_user.email}")
     return SuperadminService.list_workspaces(db)
-    
+
 @router.get("/workspaces/{workspace_id}", response_model=dict)
 async def get_workspace(
     workspace_id: UUID,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
-    """Get workspace details"""
-    from business_modules.module_superadmin.superadmin_models import Workspace
-
-    
-    # Everyone can view their own workspace
-    # Superadmin can view any workspace
+    """
+    Детали конкретной рабочей области
+    """
+    from business_modules.module_access_control.access_models import Workspace
     if current_user.role != UserRole.SUPERADMIN and current_user.workspace_id != workspace_id:
-        raise HTTPException(status_code=403, detail="Cannot view other workspaces")
-    
+        raise HTTPException(status_code=403, detail="Нет доступа к другим рабочим областям")
     workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
-    
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    
+        raise HTTPException(status_code=404, detail="Рабочая область не найдена")
     return {
         "id": str(workspace.id),
         "name": workspace.name,
@@ -155,71 +120,41 @@ async def get_workspace(
 async def suspend_workspace(
     workspace_id: UUID,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     """
-    Suspend a workspace (Superadmin only)
-    CRITICAL: All users in workspace will be deactivated
+    Приостанавливает рабочую область (только для суперадмина)
     """
     PermissionService.require_role(current_user, UserRole.SUPERADMIN)
-    
     logger.warning(
-        f"🚨 CRITICAL: Workspace suspension by {current_user.email}\n"
-        f"   Workspace ID: {workspace_id}\n"
-        f"   Timestamp: {datetime.utcnow()}"
+        f"🚨 CRITICAL: Приостановка рабочей области пользователем {current_user.email}\n"
+        f"   Идентификатор рабочей области: {workspace_id}\n"
+        f"   Время: {datetime.utcnow()}"
     )
-    
     return SuperadminService.suspend_workspace(db, workspace_id)
 
-@router.get("/workspaces")
-def get_all_workspaces(
+# ======================================================
+# Новый роут для получения списка рабочих областей с количеством пользователей
+# ======================================================
+
+@router.get("/workspaces-with-user-count", response_model=List[dict])
+def get_all_workspaces_with_user_count(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
     """
-    Get all workspaces (Superadmin only)
-    ✅ SECURE: Only superadmins can view all workspaces
+    Получить все рабочие области с указанием количества пользователей (только для суперадмина)
     """
     if current_user.role != UserRole.SUPERADMIN:
-        raise HTTPException(
-            status_code=403,
-            detail="Only superadmins can view all workspaces"
-        )
-    
-    # Import workspace model (adjust based on your structure)
-    from business_modules.module_superadmin.superadmin_models import Workspace
-
-    
-    Workspaces = db.query(Workspace).all()
-    
-    return [
-        {
-            "id": str(w.id),
-            "name": w.name,
-            "is_active": w.is_active
-        }
-        for w in Workspaces
-    ]
-
-@router.get("/workspaces")
-def get_all_workspaces(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
-):
-    """Get all workspaces with user counts (Superadmin only)"""
-    if current_user.role != UserRole.SUPERADMIN:
-        raise HTTPException(status_code=403, detail="Superadmin only")
-    
+        raise HTTPException(status_code=403, detail="Только суперадмин может просматривать все рабочие области")
     from business_modules.module_workflow.workflow_models import Workspace
     from sqlalchemy import func
-    
     workspaces = db.query(
         Workspace.id,
         Workspace.name,
         Workspace.is_active,
         func.count(User.id).label('user_count')
     ).outerjoin(User).group_by(Workspace.id).all()
-    
     return [
         {
             "id": str(ws.id),
@@ -234,68 +169,56 @@ def get_all_workspaces(
 def suspend_workspace(
     workspace_id: UUID,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
-    """Suspend a workspace (Superadmin only)"""
+    """
+    Приостановка рабочей области (только для суперадмина)
+    """
     if current_user.role != UserRole.SUPERADMIN:
-        raise HTTPException(status_code=403, detail="Superadmin only")
-    
-        
-    
+        raise HTTPException(status_code=403, detail="Только суперадмин может приостановить рабочую область")
     workspace = db.query(workspace).filter(workspace.id == workspace_id).first()
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    
+        raise HTTPException(status_code=404, detail="Рабочая область не найдена")
     workspace.is_active = False
     db.commit()
-    
-    return {"message": f"Workspace '{workspace.name}' suspended"}
-
+    return {"message": f"Рабочая область '{workspace.name}' приостановлена"}
 
 @router.put("/workspaces/{workspace_id}/activate")
 def activate_workspace(
     workspace_id: UUID,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
-    """Activate a workspace (Superadmin only)"""
+    """
+    Активация рабочей области (только для суперадмина)
+    """
     if current_user.role != UserRole.SUPERADMIN:
-        raise HTTPException(status_code=403, detail="Superadmin only")
-    
-        
-    
+        raise HTTPException(status_code=403, detail="Только суперадмин может активировать рабочую область")
     workspace = db.query(workspace).filter(workspace.id == workspace_id).first()
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    
+        raise HTTPException(status_code=404, detail="Рабочая область не найдена")
     workspace.is_active = True
     db.commit()
-    
-    return {"message": f"Workspace '{workspace.name}' activated"}
+    return {"message": f"Рабочая область '{workspace.name}' активирована"}
 
 @router.put("/workspaces/{workspace_id}")
 def update_workspace(
     workspace_id: UUID,
     data: WorkspaceUpdateSchema,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user)
 ):
-    """Update workspace details (Superadmin only)"""
+    """
+    Обновляет детали рабочей области (только для суперадмина)
+    """
     if current_user.role != UserRole.SUPERADMIN:
-        raise HTTPException(status_code=403, detail="Superadmin only")
-    
-        
-    
+        raise HTTPException(status_code=403, detail="Только суперадмин может обновить рабочую область")
     workspace = db.query(workspace).filter(workspace.id == workspace_id).first()
     if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    
-    # Update fields
+        raise HTTPException(status_code=404, detail="Рабочая область не найдена")
     if data.workspace_name is not None:
         workspace.name = data.workspace_name
     if data.is_active is not None:
         workspace.is_active = data.is_active
-    
     db.commit()
-    
-    return {"message": f"Workspace '{workspace.name}' updated successfully"}
+    return {"message": f"Рабочая область '{workspace.name}' успешно обновлена"}

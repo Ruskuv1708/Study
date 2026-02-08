@@ -6,7 +6,7 @@ import theme from '../theme'
 // Define the shape of the form data
 interface WorkspaceFormData {
   workspace_name: string;      
-  workspace_subdomain: string; 
+  subdomain_prefix: string; 
   admin_email: string;
   admin_password: string;
   admin_full_name: string;     
@@ -23,7 +23,7 @@ function SuperadminPanel() {
   const [isCreating, setIsCreating] = useState(false)
   const [formData, setFormData] = useState<WorkspaceFormData>({
     workspace_name: '',
-    workspace_subdomain: '',
+    subdomain_prefix: '',
     admin_email: '',
     admin_password: '',
     admin_full_name: ''
@@ -85,7 +85,7 @@ function SuperadminPanel() {
       alert(`✅ Workspace "${formData.workspace_name}" created successfully!`)
       setShowModal(false)
       // Reset Form
-      setFormData({ workspace_name: '', workspace_subdomain: '', admin_email: '', admin_password: '', admin_full_name: '' })
+      setFormData({ workspace_name: '', subdomain_prefix: '', admin_email: '', admin_password: '', admin_full_name: '' })
       // Refresh List
       if (token) fetchWorkspaces(token)
 
@@ -205,7 +205,7 @@ function SuperadminPanel() {
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Subdomain</label>
                   <input required placeholder="e.g. tesla" 
-                    value={formData.workspace_subdomain} onChange={e => setFormData({...formData, workspace_subdomain: e.target.value.toLowerCase()})}
+                    value={formData.subdomain_prefix} onChange={e => setFormData({...formData, subdomain_prefix: e.target.value.toLowerCase()})}
                     style={{ width: '100%', padding: '8px', border: '1px solid #ccc', borderRadius: '4px' }} />
                 </div>
               </div>

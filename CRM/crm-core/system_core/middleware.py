@@ -2,7 +2,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from system_core.database_connector import SessionLocal
 from system_core.context import workspace_context
-from business_modules.module_superadmin.superadmin_models import Workspace
+from business_modules.module_access_control.access_models import Workspace
 
 class WorkspaceMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):

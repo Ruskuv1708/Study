@@ -273,3 +273,4 @@ def update_current_user(
     )
     
     return AccessService.update_user(db, current_user.id, update_data, workspace_id)
+

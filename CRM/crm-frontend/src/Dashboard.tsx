@@ -14,7 +14,7 @@ function Dashboard() {
   useEffect(() => {
     const token = localStorage.getItem('crm_token')
     if (!token) {
-      navigate('/login')
+      navigate('/')
       return
     }
 
@@ -29,9 +29,9 @@ function Dashboard() {
     .catch(err => {
       console.error('Error fetching user:', err)
       localStorage.removeItem('crm_token')
-      navigate('/login')
+      navigate('/')
     })
-
+ 
     axios.get('http://127.0.0.1:8000/workflow/requests', {
       headers: { Authorization: `Bearer ${token}` }
     })
@@ -256,7 +256,7 @@ function Dashboard() {
                   <button
                     onClick={() => {
                       localStorage.removeItem('crm_token')
-                      navigate('/login')
+                      navigate('/')
                       setShowUserMenu(false)
                     }}
                     style={{

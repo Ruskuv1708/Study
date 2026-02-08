@@ -1,103 +1,82 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from passlib.context import CryptContext
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 from fastapi import HTTPException
 from uuid import UUID
 from datetime import datetime
-
-from business_modules.module_superadmin.superadmin_models import Workspace
-from business_modules.module_access_control.access_models import User, Workspace
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+from business_modules.module_access_control.access_models import Workspace, User
 from business_modules.module_access_control.access_enums import UserRole
+from passlib.context import CryptContext
+from business_modules.module_superadmin.superadmin_schemas import WorkspaceCreateSchema
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-class SuperadminService:
-    """
-    Business logic for Workspace management (Superadmin only)
-    """
 
+class SuperadminService:
     @staticmethod
     def create_workspace(
         db: Session,
-        workspace_name: str,
-        workspace_subdomain: str,
-        admin_full_name: str,
-        admin_email: str,
-        admin_password: str
+        data: WorkspaceCreateSchema
     ) -> dict:
         """
-        Create a new workspace with workspace admin user
-        Returns workspace info with admin credentials
+        Create a new workspace with an associated admin user
         """
-        # 1. Check if subdomain already exists
+        # Проверка существования субдомена
         existing_workspace = db.query(Workspace).filter(
-            Workspace.subdomain_prefix == workspace_subdomain
+            Workspace.subdomain_prefix == data.subdomain_prefix
         ).first()
-        
         if existing_workspace:
             raise HTTPException(
                 status_code=400,
-                detail=f"Subdomain '{workspace_subdomain}' is already taken"
+                detail=f"Subdomain '{data.subdomain_prefix}' is already taken"
             )
-        
-        # 2. Check if email already exists globally
-        existing_user = db.query(User).filter(User.email == admin_email).first()
+
+        # Проверка существования электронной почты
+        existing_user = db.query(User).filter(User.email == data.admin_email).first()
         if existing_user:
             raise HTTPException(
                 status_code=400,
-                detail=f"Email '{admin_email}' is already registered"
+                detail=f"Email '{data.admin_email}' is already registered"
             )
-        
-        # 3. Create Workspace
+
+        # Создание рабочей области
         workspace = Workspace(
-            name=workspace_name,
-            subdomain_prefix=workspace_subdomain,
-            admin_email=admin_email,
-            admin_full_name=admin_full_name,
+            name=data.workspace_name,
+            subdomain_prefix=data.subdomain_prefix,
+            admin_email=data.admin_email,
+            admin_full_name=data.admin_full_name,
             status="active",
             is_active=True,
             created_at=datetime.utcnow(),
             activated_at=datetime.utcnow(),
-            settings={
-                "features_enabled": ["workflow", "file_storage", "reports", "notifications"],
-                "plan": "professional"
-            }
+            settings={"features_enabled": ["workflow", "file_storage", "reports", "notifications"]},
         )
         db.add(workspace)
-        db.flush()  # Get workspace ID without committing
-        
-        # 4. Create workspace entry (for multi-tenancy in other modules)
-        workspace = workspace(
-            name=workspace_name,
-            subdomain_prefix=workspace_subdomain,
-            is_active=True
-        )
-        db.add(workspace)
-        db.flush()
-        
-        # 5. Create Workspace Admin User
+        db.flush()  # Получить временный ID рабочей области
+
+        # Создание администратора рабочей области
         workspace_admin = User(
-            full_name=admin_full_name,
-            email=admin_email,
-            hashed_password=pwd_context.hash(admin_password),
+            full_name=data.admin_full_name,
+            email=data.admin_email,
+            hashed_password=pwd_context.hash(data.admin_password),
             role=UserRole.ADMIN,
             is_active=True,
             workspace_id=workspace.id
         )
         db.add(workspace_admin)
-        
-        # Commit all changes
         db.commit()
         db.refresh(workspace)
-        
+
         return {
             "workspace_id": str(workspace.id),
             "workspace_name": workspace.name,
             "subdomain": workspace.subdomain_prefix,
-            "admin_email": admin_email,
+            "admin_email": workspace.admin_email,
             "message": "Workspace created successfully. Admin can now login."
         }
-
+    
     @staticmethod
     def list_workspaces(db: Session, skip: int = 0, limit: int = 100) -> list:
         """Get all workspaces (paginated)"""

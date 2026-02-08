@@ -6,7 +6,7 @@ from datetime import datetime
 class WorkspaceCreateSchema(BaseModel):
     """Request body to create a new workspace"""
     workspace_name: str
-    workspace_subdomain: str
+    subdomain_prefix: str
     admin_full_name: str
     admin_email: EmailStr
     admin_password: str
@@ -15,7 +15,7 @@ class WorkspaceCreateSchema(BaseModel):
         json_schema_extra = {
             "example": {
                 "workspace_name": "Acme Corporation",
-                "workspace_subdomain": "acme",
+                "subdomain_prefix": "acme",
                 "admin_full_name": "John Admin",
                 "admin_email": "admin@acme.com",
                 "admin_password": "SecurePassword123!"
