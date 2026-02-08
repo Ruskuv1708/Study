@@ -31,10 +31,10 @@ function Profile() {
         email: res.data.email
       })
       
-      // If we have tenant_id, fetch tenant info
-      if (res.data.tenant_id) {
+      // If we have workspace_id, fetch workspace info
+      if (res.data.workspace_id) {
         return axios.get(
-          `http://127.0.0.1:8000/superadmin/workspaces/${res.data.tenant_id}`,
+          `http://127.0.0.1:8000/superadmin/workspaces/${res.data.workspace_id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         )
       }
@@ -120,7 +120,7 @@ function Profile() {
               <div>
                 <strong>{tenant.name}</strong>
                 <div style={{ color: '#666', fontSize: '12px', marginTop: '3px' }}>
-                  ID: {currentUser?.tenant_id}
+                  ID: {currentUser?.workspace_id}
                 </div>
                 <div style={{
                   marginTop: '5px',
@@ -258,4 +258,3 @@ function Profile() {
 }
 
 export default Profile
-

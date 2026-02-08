@@ -22,12 +22,15 @@ class UserCreateSchema(BaseModel):
     email: str
     password: str
     role: UserRole = UserRole.USER
+    workspace_id: Optional[UUID] = None
+    department_id: Optional[UUID] = None
 
 class UserUpdateSchema(BaseModel):
     full_name: Optional[str] = None
     email: Optional[str] = None
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
+    department_id: Optional[UUID] = None
 
 class UserResponseSchema(BaseModel):
     id: UUID
@@ -35,9 +38,15 @@ class UserResponseSchema(BaseModel):
     email: str
     role: UserRole
     is_active: bool
+    workspace_id: Optional[UUID] = None
+    department_id: Optional[UUID] = None
 
     class Config:
         from_attributes = True
+
+class RoleUpdateSchema(BaseModel):
+    new_role: str
+    department_id: Optional[UUID] = None
 
 # ========================================
 # AUTHENTICATION ENDPOINTS
@@ -86,24 +95,34 @@ def create_user(
 ):
     """Create a new user account (Superadmin/Admin only)"""
     PermissionService.require_permission(current_user, "create_user")
+
+    if data.role == UserRole.SUPERADMIN and current_user.role != UserRole.SUPERADMIN:
+        raise HTTPException(status_code=403, detail="Only superadmin can create superadmin accounts")
     
-    # ✅ Use current_user's workspace_id
-    workspace_id = current_user.workspace_id
+    # ✅ Superadmin can create users in any workspace
+    if current_user.role == UserRole.SUPERADMIN:
+        workspace_id = data.workspace_id
+    else:
+        workspace_id = current_user.workspace_id
+
+    if current_user.role == UserRole.ADMIN and data.role in (UserRole.SUPERADMIN, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Admin cannot create admin or superadmin accounts")
     
-    if not workspace_id:
+    if data.role != UserRole.SUPERADMIN and not workspace_id:
         raise HTTPException(
             status_code=400,
-            detail="Cannot determine workspace. User must have valid workspace assignment."
+            detail="workspace_id is required for this role"
         )
     
     return AccessService.create_user(
-        db, data.full_name, data.email, data.password, data.role, workspace_id
+        db, data.full_name, data.email, data.password, data.role, workspace_id, data.department_id
     )
 
 @router.get("/users")
 def list_users(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    workspace_id: Optional[UUID] = None
 ) -> List[UserResponseSchema]:
     """
     List all user accounts
@@ -115,9 +134,10 @@ def list_users(
     # ✅ Non-superadmins only see users from their workspace
     if current_user.role != UserRole.SUPERADMIN:
         workspace_id = current_user.workspace_id
+
+    if workspace_id:
         users = db.query(User).filter(User.workspace_id == workspace_id).all()
     else:
-        # ✅ Superadmins see all users
         users = db.query(User).all()
     
     return users
@@ -129,12 +149,14 @@ def get_user(
     current_user = Depends(get_current_user)
 ) -> UserResponseSchema:
     """Get specific user account details"""
-    # ✅ Use current_user's workspace_id
-    workspace_id = current_user.workspace_id
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.workspace_id == workspace_id
-    ).first()
+    if current_user.role == UserRole.SUPERADMIN:
+        user = db.query(User).filter(User.id == user_id).first()
+    else:
+        workspace_id = current_user.workspace_id
+        user = db.query(User).filter(
+            User.id == user_id,
+            User.workspace_id == workspace_id
+        ).first()
     
     if not user:
         raise HTTPException(status_code=404, detail="User account not found")
@@ -151,20 +173,26 @@ def update_user(
     """Update user account details (Superadmin/Admin only)"""
     PermissionService.require_permission(current_user, "edit_user")
     
-    # ✅ Use current_user's workspace_id
-    workspace_id = current_user.workspace_id
+    # ✅ Superadmin can update users in any workspace
+    if current_user.role == UserRole.SUPERADMIN:
+        workspace_id = None
+    else:
+        workspace_id = current_user.workspace_id
     
-    target_user = db.query(User).filter(
-        User.id == user_id,
-        User.workspace_id == workspace_id
-    ).first()
+    query = db.query(User).filter(User.id == user_id)
+    if workspace_id:
+        query = query.filter(User.workspace_id == workspace_id)
+    target_user = query.first()
     
     if not target_user:
         raise HTTPException(status_code=404, detail="User account not found")
     
-    # Admin cannot edit higher-ranked users
-    if current_user.role == UserRole.ADMIN:
-        PermissionService.require_role(target_user, UserRole.MANAGER)
+    # Admin cannot edit admins/superadmins
+    if current_user.role == UserRole.ADMIN and target_user.role in (UserRole.SUPERADMIN, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Admin cannot edit admin or superadmin accounts")
+
+    if data.department_id is not None:
+        PermissionService.require_permission(current_user, "assign_departments")
     
     return AccessService.update_user(db, user_id, data, workspace_id)
 
@@ -174,15 +202,13 @@ def deactivate_user(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """Deactivate user account (Superadmin only)"""
-    PermissionService.require_role(current_user, UserRole.SUPERADMIN)
-    
-    # ✅ Use current_user's workspace_id
-    workspace_id = current_user.workspace_id
-    
+    """Deactivate user account (Superadmin/Admin)"""
+    PermissionService.require_permission(current_user, "delete_user")
+
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
     
+    workspace_id = None if current_user.role == UserRole.SUPERADMIN else current_user.workspace_id
     return AccessService.delete_user(db, user_id, workspace_id)
 
 # ADD THIS NEW ENDPOINT
@@ -190,7 +216,7 @@ def deactivate_user(
 @router.put("/users/{user_id}/role")
 def update_user_role(
     user_id: UUID,
-    new_role: str,  # Just accept role as string
+    data: RoleUpdateSchema,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
@@ -210,25 +236,38 @@ def update_user_role(
             detail="Cannot change your own role. Ask another admin to do this."
         )
     
-    target_user = db.query(User).filter(
-        User.id == user_id,
-        User.workspace_id == workspace_id
-    ).first()
+    query = db.query(User).filter(User.id == user_id)
+    if current_user.role != UserRole.SUPERADMIN:
+        query = query.filter(User.workspace_id == workspace_id)
+    target_user = query.first()
     
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
     
     # Validate role
     try:
-        target_user.role = UserRole[new_role.upper()]
+        parsed_role = UserRole[data.new_role.upper()]
     except KeyError:
-        raise HTTPException(status_code=400, detail=f"Invalid role: {new_role}")
+        raise HTTPException(status_code=400, detail=f"Invalid role: {data.new_role}")
+
+    if current_user.role == UserRole.ADMIN and parsed_role in (UserRole.SUPERADMIN, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Admin cannot set admin or superadmin roles")
+
+    if parsed_role in (UserRole.MANAGER, UserRole.USER):
+        if data.department_id is None and target_user.department_id is None:
+            raise HTTPException(status_code=400, detail="Department is required for manager and user roles")
+        if data.department_id is not None:
+            target_user.department_id = data.department_id
+    else:
+        target_user.department_id = None
+
+    target_user.role = parsed_role
     
     db.commit()
     db.refresh(target_user)
     
     return {
-        "message": f"User role updated to {new_role}",
+        "message": f"User role updated to {data.new_role}",
         "user": {
             "id": str(target_user.id),
             "email": target_user.email,
@@ -249,6 +288,7 @@ def get_current_user_info(current_user = Depends(get_current_user)):
         "email": current_user.email,
         "role": current_user.role,
         "workspace_id": current_user.workspace_id,
+        "department_id": current_user.department_id,
         "is_active": current_user.is_active
     }
 
@@ -273,4 +313,3 @@ def update_current_user(
     )
     
     return AccessService.update_user(db, current_user.id, update_data, workspace_id)
-

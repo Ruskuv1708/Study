@@ -28,13 +28,15 @@ class UserCreateRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     full_name: str
-    workspace_id: UUID  # Which company do they belong to?
+    workspace_id: Optional[UUID] = None  # Superadmin can set this; others inherit
+    department_id: Optional[UUID] = None
 
 class UserResponse(BaseModel):
     id: UUID
     email: EmailStr
     full_name: str
     is_active: bool
-    workspace_id: UUID
+    workspace_id: Optional[UUID] = None
+    department_id: Optional[UUID] = None
     
     model_config = ConfigDict(from_attributes=True)

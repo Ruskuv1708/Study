@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, ForeignKey, Enum,DateTime, JSON
+from sqlalchemy import Column, String, Boolean, ForeignKey, Enum, DateTime, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from system_core.base_models import CRMBasedModel
@@ -54,13 +54,40 @@ class User(CRMBasedModel):
     role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
     is_active = Column(Boolean, default=True)
 
-
-
     # 4. Link to Workspace (Renamed from tenant_id)
-    workspace_id = Column(UUID(as_uuid=True), ForeignKey("access_workspaces.id"), nullable=False)
+    # Superadmin is not tied to any workspace
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("access_workspaces.id"), nullable=True)
+
+    # 5. Optional link to Department (Managers/Users)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("workflow_departments.id"), nullable=True)
     
     # Relationship
     workspace = relationship("Workspace", back_populates="users")
+    department = relationship("Department", back_populates="users", foreign_keys=[department_id])
 
     class Config:
         orm_mode = True
+
+    __mapper_args__ = {
+        "polymorphic_on": role,
+        "polymorphic_identity": UserRole.USER,
+    }
+
+
+class SuperUser(User):
+    __mapper_args__ = {
+        "polymorphic_identity": UserRole.SUPERADMIN,
+    }
+
+
+class AdminUser(User):
+    __mapper_args__ = {
+        "polymorphic_identity": UserRole.ADMIN,
+    }
+
+
+class ManagerUser(User):
+    __mapper_args__ = {
+        "polymorphic_identity": UserRole.MANAGER,
+    }
+

@@ -3,7 +3,7 @@ export interface Department {
   id: string;
   name: string;
   description: string | null;
-  tenant_id: string;
+  workspace_id: string;
 }
 
 // 2. The Request (Updated)

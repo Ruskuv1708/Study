@@ -18,17 +18,25 @@ class AccessService:
         email: str,
         password: str,
         role: UserRole,
-        workspace_id: UUID
+        workspace_id: UUID,
+        department_id: UUID | None = None
     ):
         """Create a new user account"""
-        # Check if email already exists in workspace
-        existing = db.query(User).filter(
-            User.email == email,
-            User.workspace_id == workspace_id
-        ).first()
+        # Check if email already exists
+        existing = db.query(User).filter(User.email == email).first()
         
         if existing:
-            raise HTTPException(status_code=400, detail="Email already exists in this workspace")
+            raise HTTPException(status_code=400, detail="Email already exists")
+
+        # Superadmin is not tied to a workspace
+        if role == UserRole.SUPERADMIN:
+            workspace_id = None
+            department_id = None
+        else:
+            if not workspace_id:
+                raise HTTPException(status_code=400, detail="Workspace is required for non-superadmin users")
+            if role in (UserRole.MANAGER, UserRole.USER) and not department_id:
+                raise HTTPException(status_code=400, detail="Department is required for manager and user roles")
 
         user = User(
             full_name=full_name,
@@ -36,7 +44,8 @@ class AccessService:
             hashed_password=pwd_context.hash(password),
             role=role,
             is_active=True,
-            workspace_id=workspace_id
+            workspace_id=workspace_id,
+            department_id=department_id
         )
         db.add(user)
         db.commit()
@@ -46,10 +55,10 @@ class AccessService:
     @staticmethod
     def update_user(db: Session, user_id: UUID, data, workspace_id: UUID):
         """Update user account"""
-        user = db.query(User).filter(
-            User.id == user_id,
-            User.workspace_id == workspace_id
-        ).first()
+        query = db.query(User).filter(User.id == user_id)
+        if workspace_id:
+            query = query.filter(User.workspace_id == workspace_id)
+        user = query.first()
         
         if not user:
             raise HTTPException(status_code=404, detail="User account not found")
@@ -60,14 +69,22 @@ class AccessService:
         
         if data.email:
             # Check if new email is taken
-            existing = db.query(User).filter(
+            existing_query = db.query(User).filter(
                 User.email == data.email,
                 User.id != user_id,
-                User.workspace_id == workspace_id
-            ).first()
+            )
+            if workspace_id:
+                existing_query = existing_query.filter(User.workspace_id == workspace_id)
+            existing = existing_query.first()
             if existing:
                 raise HTTPException(status_code=400, detail="Email already in use")
             user.email = data.email
+
+        if data.department_id is not None:
+            user.department_id = data.department_id
+
+        if data.is_active is not None:
+            user.is_active = data.is_active
         
         # ✅ SECURITY: These fields can only be changed by admin, not self-service
         # if data.role:
@@ -82,10 +99,10 @@ class AccessService:
     @staticmethod
     def delete_user(db: Session, user_id: UUID, workspace_id: UUID):
         """Deactivate user account (soft delete)"""
-        user = db.query(User).filter(
-            User.id == user_id,
-            User.workspace_id == workspace_id
-        ).first()
+        query = db.query(User).filter(User.id == user_id)
+        if workspace_id:
+            query = query.filter(User.workspace_id == workspace_id)
+        user = query.first()
         
         if not user:
             raise HTTPException(status_code=404, detail="User account not found")

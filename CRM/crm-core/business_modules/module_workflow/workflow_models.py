@@ -14,6 +14,7 @@ class Department(CRMBasedModel):
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("access_workspaces.id"), nullable=False)
 
     requests = relationship("Request", back_populates="department")
+    users = relationship("User", back_populates="department")
 
 
 class Request(CRMBasedModel):
@@ -26,9 +27,13 @@ class Request(CRMBasedModel):
 
     department_id = Column(UUID(as_uuid=True), ForeignKey("workflow_departments.id"), nullable=False)
     assigned_to_id = Column(UUID(as_uuid=True), ForeignKey("access_users.id"), nullable=True)
+    created_by_id = Column(UUID(as_uuid=True), ForeignKey("access_users.id"), nullable=True)
+    created_by_id = Column(UUID(as_uuid=True), ForeignKey("access_users.id"), nullable=True)
     
     # CHANGE: access_tenants -> access_workspaces
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("access_workspaces.id"), nullable=False)
 
     department = relationship("Department", back_populates="requests")
     assignee = relationship("User", foreign_keys=[assigned_to_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    creator = relationship("User", foreign_keys=[created_by_id])

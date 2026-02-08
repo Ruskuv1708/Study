@@ -33,12 +33,12 @@ class PermissionService:
         UserRole.ADMIN: [
             "create_user",
             "edit_user",  # Only lower-ranked users
+            "delete_user",
+            "manage_roles",
             "create_department",
             "edit_department",
+            "delete_department",
             "assign_departments",
-            "create_request",
-            "edit_request",
-            "assign_request",
             "view_all_requests",
             "view_all_users",
             "view_reports",
@@ -47,13 +47,14 @@ class PermissionService:
             "create_request",
             "edit_request",
             "assign_request",
-            "view_all_requests",
-            "view_team_users",
+            "view_department_requests",
+            "view_department_users",
         ],
         UserRole.USER: [
             "create_request",
             "edit_own_request",
             "view_own_requests",
+            "view_created_requests",
         ],
         UserRole.VIEWER: [
             "view_own_requests",

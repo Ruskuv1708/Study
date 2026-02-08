@@ -43,6 +43,38 @@ function SuperadminPanel() {
     .catch(err => console.error(err))
   }
 
+  const handleSuspend = async (workspaceId: string) => {
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    if (!confirm('Suspend this workspace?')) return
+    await axios.post(`http://127.0.0.1:8000/superadmin/workspaces/${workspaceId}/suspend`, null, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    fetchWorkspaces(token)
+  }
+
+  const handleActivate = async (workspaceId: string) => {
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    await axios.put(`http://127.0.0.1:8000/superadmin/workspaces/${workspaceId}/activate`, null, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    fetchWorkspaces(token)
+  }
+
+  const handleRename = async (workspaceId: string, currentName: string) => {
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    const newName = prompt('New workspace name:', currentName)
+    if (!newName || newName.trim() === currentName) return
+    await axios.put(`http://127.0.0.1:8000/superadmin/workspaces/${workspaceId}`, {
+      workspace_name: newName.trim()
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    fetchWorkspaces(token)
+  }
+
   // 2. Initial Load Effect
   useEffect(() => {
     const token = localStorage.getItem('crm_token')
@@ -161,6 +193,7 @@ function SuperadminPanel() {
               <th style={{ padding: '15px', textAlign: 'left' }}>Subdomain</th>
               <th style={{ padding: '15px', textAlign: 'left' }}>Admin Contact</th>
               <th style={{ padding: '15px', textAlign: 'left' }}>Status</th>
+              <th style={{ padding: '15px', textAlign: 'center' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -173,6 +206,19 @@ function SuperadminPanel() {
                   <span style={{ color: ws.is_active ? theme.colors.success : theme.colors.error, fontWeight: 'bold' }}>
                     {ws.is_active ? '● Active' : '● Suspended'}
                   </span>
+                </td>
+                <td style={{ padding: '15px', textAlign: 'center' }}>
+                  <button
+                    onClick={() => handleRename(ws.id, ws.name)}
+                    style={{ marginRight: '8px' }}
+                  >
+                    Rename
+                  </button>
+                  {ws.is_active ? (
+                    <button onClick={() => handleSuspend(ws.id)}>Suspend</button>
+                  ) : (
+                    <button onClick={() => handleActivate(ws.id)}>Activate</button>
+                  )}
                 </td>
               </tr>
             ))}

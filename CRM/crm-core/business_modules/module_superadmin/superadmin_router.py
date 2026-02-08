@@ -147,7 +147,7 @@ def get_all_workspaces_with_user_count(
     """
     if current_user.role != UserRole.SUPERADMIN:
         raise HTTPException(status_code=403, detail="Только суперадмин может просматривать все рабочие области")
-    from business_modules.module_workflow.workflow_models import Workspace
+    from business_modules.module_access_control.access_models import Workspace
     from sqlalchemy import func
     workspaces = db.query(
         Workspace.id,
@@ -176,7 +176,8 @@ def suspend_workspace(
     """
     if current_user.role != UserRole.SUPERADMIN:
         raise HTTPException(status_code=403, detail="Только суперадмин может приостановить рабочую область")
-    workspace = db.query(workspace).filter(workspace.id == workspace_id).first()
+    from business_modules.module_access_control.access_models import Workspace
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if not workspace:
         raise HTTPException(status_code=404, detail="Рабочая область не найдена")
     workspace.is_active = False
@@ -194,7 +195,8 @@ def activate_workspace(
     """
     if current_user.role != UserRole.SUPERADMIN:
         raise HTTPException(status_code=403, detail="Только суперадмин может активировать рабочую область")
-    workspace = db.query(workspace).filter(workspace.id == workspace_id).first()
+    from business_modules.module_access_control.access_models import Workspace
+    workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if not workspace:
         raise HTTPException(status_code=404, detail="Рабочая область не найдена")
     workspace.is_active = True
@@ -213,12 +215,13 @@ def update_workspace(
     """
     if current_user.role != UserRole.SUPERADMIN:
         raise HTTPException(status_code=403, detail="Только суперадмин может обновить рабочую область")
-    workspace = db.query(workspace).filter(workspace.id == workspace_id).first()
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Рабочая область не найдена")
-    if data.workspace_name is not None:
-        workspace.name = data.workspace_name
-    if data.is_active is not None:
-        workspace.is_active = data.is_active
-    db.commit()
+    if current_user.role != UserRole.SUPERADMIN:
+        raise HTTPException(status_code=403, detail="Только суперадмин может обновить рабочую область")
+    workspace = SuperadminService.update_workspace(
+        db,
+        workspace_id,
+        workspace_name=data.workspace_name,
+        status=data.status,
+        settings=data.settings
+    )
     return {"message": f"Рабочая область '{workspace.name}' успешно обновлена"}

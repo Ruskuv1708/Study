@@ -8,20 +8,28 @@ interface User {
   email: string
   role: 'superadmin' | 'admin' | 'manager' | 'user' | 'viewer'
   is_active: boolean
-  tenant_id: string
+  workspace_id: string | null
+  department_id: string | null
 }
 
-interface Tenant {
+interface Workspace {
   id: string
   name: string
   is_active: boolean
 }
 
+interface Department {
+  id: string
+  name: string
+  description?: string | null
+}
+
 function AdminPanel() {
   const [users, setUsers] = useState<User[]>([])
-  const [tenants, setTenants] = useState<Tenant[]>([])
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [selectedTenant, setSelectedTenant] = useState<string>('')
+  const [selectedWorkspace, setSelectedWorkspace] = useState<string>('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
@@ -31,8 +39,14 @@ function AdminPanel() {
     email: '',
     password: '',
     role: 'user',
-    tenant_id: ''  // ✅ Added tenant selection
+    workspace_id: '',
+    department_id: ''
   })
+
+  const [newDept, setNewDept] = useState({ name: '', description: '' })
+  const [editDeptId, setEditDeptId] = useState<string | null>(null)
+  const [editDeptName, setEditDeptName] = useState('')
+  const [editDeptDescription, setEditDeptDescription] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('crm_token')
@@ -54,19 +68,24 @@ function AdminPanel() {
         return
       }
 
-      // Set default tenant to current user's tenant
-      setSelectedTenant(res.data.tenant_id)
+      // Set default workspace to current user's workspace
+      setSelectedWorkspace(res.data.workspace_id)
       
-      // Load tenants if superadmin
+      // Load workspaces
       if (res.data.role === 'superadmin') {
         return axios.get('http://127.0.0.1:8000/superadmin/workspaces', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      }
+      if (res.data.workspace_id) {
+        return axios.get(`http://127.0.0.1:8000/superadmin/workspaces/${res.data.workspace_id}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
       }
     })
     .then(res => {
       if (res && res.data) {
-        setTenants(res.data)
+        setWorkspaces(Array.isArray(res.data) ? res.data : [res.data])
       }
     })
     .then(() => {
@@ -85,17 +104,114 @@ function AdminPanel() {
     })
   }, [navigate])
 
+  useEffect(() => {
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+
+    const params = currentUser?.role === 'superadmin' && selectedWorkspace
+      ? { workspace_id: selectedWorkspace }
+      : undefined
+
+    axios.get('http://127.0.0.1:8000/workflow/departments', {
+      headers: { Authorization: `Bearer ${token}` },
+      params
+    })
+    .then(res => setDepartments(res.data))
+    .catch(err => console.error(err))
+  }, [currentUser?.role, selectedWorkspace])
+
+  useEffect(() => {
+    if (!currentUser) return
+    if (currentUser.role === 'superadmin') {
+      setNewUser(prev => ({ ...prev, workspace_id: selectedWorkspace || '' }))
+    } else {
+      setNewUser(prev => ({ ...prev, workspace_id: currentUser.workspace_id || '' }))
+    }
+  }, [currentUser, selectedWorkspace])
+
+  useEffect(() => {
+    if (currentUser?.role === 'superadmin' && !selectedWorkspace && workspaces.length > 0) {
+      setSelectedWorkspace(workspaces[0].id)
+    }
+  }, [currentUser?.role, selectedWorkspace, workspaces])
+
+  const getWorkspaceParams = () => {
+    if (currentUser?.role === 'superadmin' && selectedWorkspace) {
+      return { workspace_id: selectedWorkspace }
+    }
+    return undefined
+  }
+
+  const handleCreateDepartment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const token = localStorage.getItem('crm_token')
+    try {
+      await axios.post('http://127.0.0.1:8000/workflow/departments', newDept, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: getWorkspaceParams()
+      })
+      setNewDept({ name: '', description: '' })
+      const res = await axios.get('http://127.0.0.1:8000/workflow/departments', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: getWorkspaceParams()
+      })
+      setDepartments(res.data)
+    } catch (err: any) {
+      alert(err.response?.data?.detail || '❌ Failed to create department')
+    }
+  }
+
+  const handleUpdateDepartment = async (deptId: string) => {
+    const token = localStorage.getItem('crm_token')
+    try {
+      await axios.put(
+        `http://127.0.0.1:8000/workflow/departments/${deptId}`,
+        { name: editDeptName, description: editDeptDescription },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: getWorkspaceParams()
+        }
+      )
+      setEditDeptId(null)
+      const res = await axios.get('http://127.0.0.1:8000/workflow/departments', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: getWorkspaceParams()
+      })
+      setDepartments(res.data)
+    } catch (err: any) {
+      alert(err.response?.data?.detail || '❌ Failed to update department')
+    }
+  }
+
+  const handleDeleteDepartment = async (deptId: string) => {
+    const token = localStorage.getItem('crm_token')
+    if (!confirm('Delete this department?')) return
+    try {
+      await axios.delete(`http://127.0.0.1:8000/workflow/departments/${deptId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: getWorkspaceParams()
+      })
+      setDepartments(prev => prev.filter(d => d.id !== deptId))
+    } catch (err: any) {
+      alert(err.response?.data?.detail || '❌ Failed to delete department')
+    }
+  }
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
     const token = localStorage.getItem('crm_token')
     
-    if (!newUser.tenant_id) {
+    if (newUser.role !== 'superadmin' && !newUser.workspace_id) {
       alert('❌ Please select a workspace (tenant)')
+      return
+    }
+    if ((newUser.role === 'manager' || newUser.role === 'user') && !newUser.department_id) {
+      alert('❌ Please select a department for manager/user')
       return
     }
 
     try {
-      // Create user with tenant_id
+      // Create user with workspace_id
       await axios.post(
         'http://127.0.0.1:8000/access/users',
         {
@@ -103,7 +219,8 @@ function AdminPanel() {
           email: newUser.email,
           password: newUser.password,
           role: newUser.role,
-          tenant_id: newUser.tenant_id  // ✅ Include tenant_id
+          workspace_id: newUser.workspace_id,
+          department_id: newUser.department_id || null
         },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -119,7 +236,8 @@ function AdminPanel() {
         email: '',
         password: '',
         role: 'user',
-        tenant_id: selectedTenant
+        workspace_id: selectedWorkspace,
+        department_id: ''
       })
       setShowCreateForm(false)
       alert('✅ User created successfully')
@@ -128,7 +246,7 @@ function AdminPanel() {
     }
   }
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
+  const handleUpdateRole = async (userId: string, newRole: string, departmentId?: string) => {
     const token = localStorage.getItem('crm_token')
     
     if (userId === currentUser?.id) {
@@ -136,10 +254,15 @@ function AdminPanel() {
       return
     }
     
+    if ((newRole === 'manager' || newRole === 'user') && !departmentId) {
+      alert('❌ Please set a department before assigning manager/user role')
+      return
+    }
+
     try {
       await axios.put(
         `http://127.0.0.1:8000/access/users/${userId}/role`,
-        { role: newRole.toUpperCase() },
+        { new_role: newRole, department_id: departmentId || null },
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
@@ -177,11 +300,28 @@ function AdminPanel() {
     }
   }
 
+  const handleUpdateDepartment = async (userId: string, departmentId: string) => {
+    const token = localStorage.getItem('crm_token')
+    try {
+      await axios.put(
+        `http://127.0.0.1:8000/access/users/${userId}`,
+        { department_id: departmentId || null },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      const res = await axios.get('http://127.0.0.1:8000/access/users', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setUsers(res.data)
+    } catch (err: any) {
+      alert(err.response?.data?.detail || '❌ Failed to update department')
+    }
+  }
+
   if (!currentUser || loading) return <div>Loading...</div>
 
   // ✅ Filter users by selected tenant for non-superadmin
   const filteredUsers = currentUser.role === 'superadmin'
-    ? users.filter(u => u.tenant_id === selectedTenant)
+    ? users.filter(u => u.workspace_id === selectedWorkspace)
     : users
 
   return (
@@ -207,13 +347,13 @@ function AdminPanel() {
 
       
       {/* ✅ Tenant Selector for Superadmin */}
-      {currentUser.role === 'superadmin' && tenants.length > 0 && (
+      {currentUser.role === 'superadmin' && workspaces.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '10px', background: '#f0f0f0', borderRadius: '4px' }}>
           <label>
             <strong>Select Workspace:</strong>
             <select
-              value={selectedTenant}
-              onChange={(e) => setSelectedTenant(e.target.value)}
+              value={selectedWorkspace}
+              onChange={(e) => setSelectedWorkspace(e.target.value)}
               style={{
                 marginLeft: '10px',
                 padding: '6px 12px',
@@ -221,7 +361,7 @@ function AdminPanel() {
                 border: '1px solid #ccc'
               }}
             >
-              {tenants.map(t => (
+              {workspaces.map(t => (
                 <option key={t.id} value={t.id}>
                   {t.name} {!t.is_active && '(Inactive)'}
                 </option>
@@ -293,7 +433,7 @@ function AdminPanel() {
             <label>Role:</label>
             <select
               value={newUser.role}
-              onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+              onChange={(e) => setNewUser({...newUser, role: e.target.value, department_id: ''})}
               style={{ width: '100%', padding: '8px', marginTop: '5px' }}
             >
               <option value="user">User</option>
@@ -302,23 +442,42 @@ function AdminPanel() {
             </select>
           </div>
 
-          {/* ✅ Tenant Selection */}
+          {/* Workspace Selection */}
           <div style={{ marginBottom: '15px' }}>
-            <label>Workspace (Tenant):</label>
+            <label>Workspace:</label>
             <select
-              value={newUser.tenant_id}
-              onChange={(e) => setNewUser({...newUser, tenant_id: e.target.value})}
-              required
+              value={newUser.workspace_id}
+              onChange={(e) => setNewUser({...newUser, workspace_id: e.target.value})}
+              required={newUser.role !== 'superadmin'}
               style={{ width: '100%', padding: '8px', marginTop: '5px' }}
             >
               <option value="">-- Select Workspace --</option>
-              {tenants.map(t => (
+              {(currentUser.role === 'superadmin' ? workspaces : workspaces.filter(w => w.id === currentUser.workspace_id)).map(t => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
             </select>
           </div>
+
+          {(newUser.role === 'manager' || newUser.role === 'user') && (
+            <div style={{ marginBottom: '15px' }}>
+              <label>Department:</label>
+              <select
+                value={newUser.department_id}
+                onChange={(e) => setNewUser({...newUser, department_id: e.target.value})}
+                required
+                style={{ width: '100%', padding: '8px', marginTop: '5px' }}
+              >
+                <option value="">-- Select Department --</option>
+                {departments.map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <button
             type="submit"
@@ -351,6 +510,7 @@ function AdminPanel() {
               <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'left' }}>Name</th>
               <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'left' }}>Email</th>
               <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'left' }}>Role</th>
+              <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'left' }}>Department</th>
               <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'left' }}>Status</th>
               <th style={{ border: '1px solid #ddd', padding: '10px', textAlign: 'center' }}>Actions</th>
             </tr>
@@ -363,7 +523,7 @@ function AdminPanel() {
                 <td style={{ border: '1px solid #ddd', padding: '10px' }}>
                   <select
                     value={user.role}
-                    onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                    onChange={(e) => handleUpdateRole(user.id, e.target.value, user.department_id || undefined)}
                     disabled={user.id === currentUser?.id}
                     style={{
                       opacity: user.id === currentUser?.id ? 0.5 : 1,
@@ -374,8 +534,26 @@ function AdminPanel() {
                     <option value="viewer">Viewer</option>
                     <option value="user">User</option>
                     <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
+                    {currentUser.role === 'superadmin' && <option value="admin">Admin</option>}
                   </select>
+                </td>
+                <td style={{ border: '1px solid #ddd', padding: '10px' }}>
+                  {(user.role === 'manager' || user.role === 'user') ? (
+                    <select
+                      value={user.department_id || ''}
+                      onChange={(e) => handleUpdateDepartment(user.id, e.target.value)}
+                      style={{ padding: '4px' }}
+                    >
+                      <option value="">-- Select --</option>
+                      {departments.map(d => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span>—</span>
+                  )}
                 </td>
                 <td style={{ border: '1px solid #ddd', padding: '10px' }}>
                   {user.is_active ? '✅ Active' : '❌ Inactive'}
@@ -395,6 +573,94 @@ function AdminPanel() {
                   >
                     {user.is_active ? 'Deactivate' : 'Reactivate'}
                   </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* Departments Management */}
+      <h2 style={{ marginTop: '40px' }}>Departments ({departments.length})</h2>
+      <form onSubmit={handleCreateDepartment} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+        <input
+          placeholder="Department name"
+          value={newDept.name}
+          onChange={(e) => setNewDept({ ...newDept, name: e.target.value })}
+          required
+          style={{ padding: '8px', flex: 1 }}
+        />
+        <input
+          placeholder="Description (optional)"
+          value={newDept.description}
+          onChange={(e) => setNewDept({ ...newDept, description: e.target.value })}
+          style={{ padding: '8px', flex: 2 }}
+        />
+        <button type="submit" style={{ padding: '8px 14px' }}>Add</button>
+      </form>
+
+      {departments.length === 0 ? (
+        <p>No departments found</p>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: '#f0f0f0' }}>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'left' }}>Name</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'left' }}>Description</th>
+              <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {departments.map(d => (
+              <tr key={d.id}>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {editDeptId === d.id ? (
+                    <input
+                      value={editDeptName}
+                      onChange={(e) => setEditDeptName(e.target.value)}
+                      style={{ width: '100%', padding: '6px' }}
+                    />
+                  ) : (
+                    d.name
+                  )}
+                </td>
+                <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                  {editDeptId === d.id ? (
+                    <input
+                      value={editDeptDescription}
+                      onChange={(e) => setEditDeptDescription(e.target.value)}
+                      style={{ width: '100%', padding: '6px' }}
+                    />
+                  ) : (
+                    d.description || '—'
+                  )}
+                </td>
+                <td style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'center' }}>
+                  {editDeptId === d.id ? (
+                    <>
+                      <button
+                        onClick={() => handleUpdateDepartment(d.id)}
+                        style={{ marginRight: '8px' }}
+                      >
+                        Save
+                      </button>
+                      <button onClick={() => setEditDeptId(null)}>Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setEditDeptId(d.id)
+                          setEditDeptName(d.name)
+                          setEditDeptDescription(d.description || '')
+                        }}
+                        style={{ marginRight: '8px' }}
+                      >
+                        Edit
+                      </button>
+                      <button onClick={() => handleDeleteDepartment(d.id)}>Delete</button>
+                    </>
+                  )}
                 </td>
               </tr>
             ))}
