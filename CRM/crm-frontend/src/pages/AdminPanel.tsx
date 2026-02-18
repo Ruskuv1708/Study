@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { ROLE_DISPLAY_NAMES, roleMatches } from '../shared/roleLabels'
 
 interface User {
   id: string
   full_name: string
   email: string
-  role: 'superadmin' | 'admin' | 'manager' | 'user' | 'viewer'
+  role: 'SUPERADMIN' | 'SYSTEM_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER' | 'VIEWER'
   is_active: boolean
   workspace_id: string | null
   department_id: string | null
@@ -29,7 +30,13 @@ function AdminPanel() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [currentUser, setCurrentUser] = useState<any>(null)
-  const [selectedWorkspace, setSelectedWorkspace] = useState<string>('')
+  const [selectedWorkspace, setSelectedWorkspace] = useState<string>(() => {
+    try {
+      return localStorage.getItem('crm_workspace_id') || ''
+    } catch {
+      return ''
+    }
+  })
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
@@ -38,7 +45,7 @@ function AdminPanel() {
     full_name: '',
     email: '',
     password: '',
-    role: 'user',
+    role: 'USER',
     workspace_id: '',
     department_id: ''
   })
@@ -48,6 +55,34 @@ function AdminPanel() {
   const [editDeptName, setEditDeptName] = useState('')
   const [editDeptDescription, setEditDeptDescription] = useState('')
 
+  const getRoleOptions = (role: string) => {
+    if (roleMatches(role, ['SUPERADMIN', 'SYSTEM_ADMIN'])) {
+      return ['VIEWER', 'USER', 'MANAGER', 'ADMIN', 'SYSTEM_ADMIN']
+    }
+    if (roleMatches(role, ['ADMIN'])) {
+      return ['VIEWER', 'USER', 'MANAGER']
+    }
+    if (roleMatches(role, ['MANAGER'])) {
+      return ['VIEWER', 'USER']
+    }
+    return ['VIEWER', 'USER']
+  }
+
+  const getRoleOptionsForCreation = (role: string) => getRoleOptions(role)
+  const getRoleOptionsForEdit = (role: string) => getRoleOptions(role)
+  const resolveRoleOptions = (targetRole: string) => {
+    const editorRole = currentUser?.role || 'ADMIN'
+    const baseOptions = getRoleOptionsForEdit(editorRole)
+    const normalizedTarget = targetRole.toUpperCase()
+    return baseOptions.includes(normalizedTarget) ? baseOptions : [...baseOptions, normalizedTarget]
+  }
+
+  const normalizeUserRole = (role?: string) => (role || '').toUpperCase()
+  const normalizeUser = (user: any) => ({
+    ...user,
+    role: normalizeUserRole(user.role)
+  })
+
   useEffect(() => {
     const token = localStorage.getItem('crm_token')
     if (!token) {
@@ -56,29 +91,30 @@ function AdminPanel() {
     }
 
     // Get current user
-    axios.get('http://127.0.0.1:8000/access/me', {
+    axios.get('/access/me', {
       headers: { Authorization: `Bearer ${token}` }
     })
     .then(res => {
-      setCurrentUser(res.data)
+      const normalized = normalizeUser(res.data)
+      setCurrentUser(normalized)
       
       // Check if admin
-      if (res.data.role !== 'admin' && res.data.role !== 'superadmin') {
+      if (!roleMatches(normalized.role, ['ADMIN', 'SUPERADMIN', 'SYSTEM_ADMIN'])) {
         navigate('/dashboard')
         return
       }
 
       // Set default workspace to current user's workspace
       setSelectedWorkspace(res.data.workspace_id)
-      
+     
       // Load workspaces
-      if (res.data.role === 'superadmin') {
-        return axios.get('http://127.0.0.1:8000/superadmin/workspaces', {
+      if (roleMatches(normalized.role, ['SUPERADMIN','SYSTEM_ADMIN'])) {
+        return axios.get('/superadmin/workspaces', {
           headers: { Authorization: `Bearer ${token}` }
         })
       }
       if (res.data.workspace_id) {
-        return axios.get(`http://127.0.0.1:8000/superadmin/workspaces/${res.data.workspace_id}`, {
+        return axios.get(`/superadmin/workspaces/${res.data.workspace_id}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
       }
@@ -90,12 +126,13 @@ function AdminPanel() {
     })
     .then(() => {
       // Load users for current tenant
-      return axios.get('http://127.0.0.1:8000/access/users', {
+      return axios.get('/access/users', {
         headers: { Authorization: `Bearer ${token}` }
       })
     })
     .then(res => {
-      setUsers(res.data)
+      if (!res?.data) return
+      setUsers(res.data.map((user: any) => normalizeUser(user)))
       setLoading(false)
     })
     .catch(err => {
@@ -108,11 +145,11 @@ function AdminPanel() {
     const token = localStorage.getItem('crm_token')
     if (!token) return
 
-    const params = currentUser?.role === 'superadmin' && selectedWorkspace
+    const params = roleMatches(currentUser?.role, ['SUPERADMIN','SYSTEM_ADMIN']) && selectedWorkspace
       ? { workspace_id: selectedWorkspace }
       : undefined
 
-    axios.get('http://127.0.0.1:8000/workflow/departments', {
+    axios.get('/workflow/departments', {
       headers: { Authorization: `Bearer ${token}` },
       params
     })
@@ -122,7 +159,7 @@ function AdminPanel() {
 
   useEffect(() => {
     if (!currentUser) return
-    if (currentUser.role === 'superadmin') {
+    if (roleMatches(currentUser.role, ['SUPERADMIN','SYSTEM_ADMIN'])) {
       setNewUser(prev => ({ ...prev, workspace_id: selectedWorkspace || '' }))
     } else {
       setNewUser(prev => ({ ...prev, workspace_id: currentUser.workspace_id || '' }))
@@ -130,13 +167,23 @@ function AdminPanel() {
   }, [currentUser, selectedWorkspace])
 
   useEffect(() => {
-    if (currentUser?.role === 'superadmin' && !selectedWorkspace && workspaces.length > 0) {
+    if (roleMatches(currentUser?.role, ['SUPERADMIN','SYSTEM_ADMIN']) && !selectedWorkspace && workspaces.length > 0) {
       setSelectedWorkspace(workspaces[0].id)
     }
   }, [currentUser?.role, selectedWorkspace, workspaces])
 
+  useEffect(() => {
+    if (!roleMatches(currentUser?.role, ['SUPERADMIN','SYSTEM_ADMIN'])) return
+    if (!selectedWorkspace) return
+    try {
+      localStorage.setItem('crm_workspace_id', selectedWorkspace)
+    } catch {
+      // ignore storage errors
+    }
+  }, [currentUser?.role, selectedWorkspace])
+
   const getWorkspaceParams = () => {
-    if (currentUser?.role === 'superadmin' && selectedWorkspace) {
+    if (roleMatches(currentUser?.role, ['SUPERADMIN','SYSTEM_ADMIN']) && selectedWorkspace) {
       return { workspace_id: selectedWorkspace }
     }
     return undefined
@@ -145,13 +192,18 @@ function AdminPanel() {
   const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault()
     const token = localStorage.getItem('crm_token')
+    if (!token) return
+    if (roleMatches(currentUser?.role, ['SUPERADMIN','SYSTEM_ADMIN']) && !selectedWorkspace) {
+      alert('Please select a workspace before creating a department')
+      return
+    }
     try {
-      await axios.post('http://127.0.0.1:8000/workflow/departments', newDept, {
+      await axios.post('/workflow/departments', newDept, {
         headers: { Authorization: `Bearer ${token}` },
         params: getWorkspaceParams()
       })
       setNewDept({ name: '', description: '' })
-      const res = await axios.get('http://127.0.0.1:8000/workflow/departments', {
+      const res = await axios.get('/workflow/departments', {
         headers: { Authorization: `Bearer ${token}` },
         params: getWorkspaceParams()
       })
@@ -165,7 +217,7 @@ function AdminPanel() {
     const token = localStorage.getItem('crm_token')
     try {
       await axios.put(
-        `http://127.0.0.1:8000/workflow/departments/${deptId}`,
+        `/workflow/departments/${deptId}`,
         { name: editDeptName, description: editDeptDescription },
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -173,7 +225,7 @@ function AdminPanel() {
         }
       )
       setEditDeptId(null)
-      const res = await axios.get('http://127.0.0.1:8000/workflow/departments', {
+      const res = await axios.get('/workflow/departments', {
         headers: { Authorization: `Bearer ${token}` },
         params: getWorkspaceParams()
       })
@@ -183,11 +235,29 @@ function AdminPanel() {
     }
   }
 
+  const handleUpdateUserDepartment = async (userId: string, departmentId: string | null) => {
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    try {
+      await axios.put(
+        `/access/users/${userId}`,
+        { department_id: departmentId || null },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      const res = await axios.get('/access/users', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setUsers(res.data.map((user: any) => normalizeUser(user)))
+    } catch (err: any) {
+      alert(err.response?.data?.detail || '❌ Failed to update department')
+    }
+  }
+
   const handleDeleteDepartment = async (deptId: string) => {
     const token = localStorage.getItem('crm_token')
     if (!confirm('Delete this department?')) return
     try {
-      await axios.delete(`http://127.0.0.1:8000/workflow/departments/${deptId}`, {
+      await axios.delete(`/workflow/departments/${deptId}`, {
         headers: { Authorization: `Bearer ${token}` },
         params: getWorkspaceParams()
       })
@@ -201,11 +271,11 @@ function AdminPanel() {
     e.preventDefault()
     const token = localStorage.getItem('crm_token')
     
-    if (newUser.role !== 'superadmin' && !newUser.workspace_id) {
+    if (!roleMatches(newUser.role, ['SUPERADMIN','SYSTEM_ADMIN']) && !newUser.workspace_id) {
       alert('❌ Please select a workspace (tenant)')
       return
     }
-    if ((newUser.role === 'manager' || newUser.role === 'user') && !newUser.department_id) {
+    if (roleMatches(newUser.role, ['MANAGER','USER']) && !newUser.department_id) {
       alert('❌ Please select a department for manager/user')
       return
     }
@@ -213,7 +283,7 @@ function AdminPanel() {
     try {
       // Create user with workspace_id
       await axios.post(
-        'http://127.0.0.1:8000/access/users',
+        '/access/users',
         {
           full_name: newUser.full_name,
           email: newUser.email,
@@ -226,16 +296,16 @@ function AdminPanel() {
       )
 
       // Refresh users list
-      const res = await axios.get('http://127.0.0.1:8000/access/users', {
+      const res = await axios.get('/access/users', {
         headers: { Authorization: `Bearer ${token}` }
       })
-      setUsers(res.data)
+      setUsers(res.data.map((user: any) => normalizeUser(user)))
       
       setNewUser({
         full_name: '',
         email: '',
         password: '',
-        role: 'user',
+        role: 'USER',
         workspace_id: selectedWorkspace,
         department_id: ''
       })
@@ -254,22 +324,22 @@ function AdminPanel() {
       return
     }
     
-    if ((newRole === 'manager' || newRole === 'user') && !departmentId) {
+    if (roleMatches(newRole, ['MANAGER','USER']) && !departmentId) {
       alert('❌ Please set a department before assigning manager/user role')
       return
     }
 
     try {
       await axios.put(
-        `http://127.0.0.1:8000/access/users/${userId}/role`,
+        `/access/users/${userId}/role`,
         { new_role: newRole, department_id: departmentId || null },
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
-      const res = await axios.get('http://127.0.0.1:8000/access/users', {
+      const res = await axios.get('/access/users', {
         headers: { Authorization: `Bearer ${token}` }
       })
-      setUsers(res.data)
+      setUsers(res.data.map((user: any) => normalizeUser(user)))
       alert('✅ User role updated')
     } catch (err: any) {
       alert(err.response?.data?.detail || '❌ Failed to update role')
@@ -286,43 +356,28 @@ function AdminPanel() {
       const newStatus = !user.is_active
       
       await axios.put(
-        `http://127.0.0.1:8000/access/users/${userId}`,
+        `/access/users/${userId}`,
         { is_active: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       )
       
-      const res = await axios.get('http://127.0.0.1:8000/access/users', {
+      const res = await axios.get('/access/users', {
         headers: { Authorization: `Bearer ${token}` }
       })
-      setUsers(res.data)
+      setUsers(res.data.map((user: any) => normalizeUser(user)))
     } catch (err) {
       alert('❌ Failed to update user status')
-    }
-  }
-
-  const handleUpdateDepartment = async (userId: string, departmentId: string) => {
-    const token = localStorage.getItem('crm_token')
-    try {
-      await axios.put(
-        `http://127.0.0.1:8000/access/users/${userId}`,
-        { department_id: departmentId || null },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      const res = await axios.get('http://127.0.0.1:8000/access/users', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      setUsers(res.data)
-    } catch (err: any) {
-      alert(err.response?.data?.detail || '❌ Failed to update department')
     }
   }
 
   if (!currentUser || loading) return <div>Loading...</div>
 
   // ✅ Filter users by selected tenant for non-superadmin
-  const filteredUsers = currentUser.role === 'superadmin'
+  const filteredUsers = roleMatches(currentUser.role, ['SUPERADMIN','SYSTEM_ADMIN'])
     ? users.filter(u => u.workspace_id === selectedWorkspace)
     : users
+
+  const creationRoleOptions = getRoleOptionsForCreation(currentUser.role)
 
   return (
     <div style={{ padding: '20px' }}>
@@ -347,7 +402,7 @@ function AdminPanel() {
 
       
       {/* ✅ Tenant Selector for Superadmin */}
-      {currentUser.role === 'superadmin' && workspaces.length > 0 && (
+      {roleMatches(currentUser.role, ['SUPERADMIN','SYSTEM_ADMIN']) && workspaces.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '10px', background: '#f0f0f0', borderRadius: '4px' }}>
           <label>
             <strong>Select Workspace:</strong>
@@ -436,9 +491,11 @@ function AdminPanel() {
               onChange={(e) => setNewUser({...newUser, role: e.target.value, department_id: ''})}
               style={{ width: '100%', padding: '8px', marginTop: '5px' }}
             >
-              <option value="user">User</option>
-              <option value="manager">Manager</option>
-              <option value="admin">Admin</option>
+              {creationRoleOptions.map(option => (
+                <option key={option} value={option}>
+                  {ROLE_DISPLAY_NAMES[option] ?? option}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -448,11 +505,11 @@ function AdminPanel() {
             <select
               value={newUser.workspace_id}
               onChange={(e) => setNewUser({...newUser, workspace_id: e.target.value})}
-              required={newUser.role !== 'superadmin'}
+              required={!roleMatches(newUser.role, ['SUPERADMIN','SYSTEM_ADMIN'])}
               style={{ width: '100%', padding: '8px', marginTop: '5px' }}
             >
               <option value="">-- Select Workspace --</option>
-              {(currentUser.role === 'superadmin' ? workspaces : workspaces.filter(w => w.id === currentUser.workspace_id)).map(t => (
+              {(roleMatches(currentUser.role, ['SUPERADMIN','SYSTEM_ADMIN']) ? workspaces : workspaces.filter(w => w.id === currentUser.workspace_id)).map(t => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
@@ -460,7 +517,7 @@ function AdminPanel() {
             </select>
           </div>
 
-          {(newUser.role === 'manager' || newUser.role === 'user') && (
+          {roleMatches(newUser.role, ['MANAGER','USER']) && (
             <div style={{ marginBottom: '15px' }}>
               <label>Department:</label>
               <select
@@ -531,20 +588,21 @@ function AdminPanel() {
                       padding: '4px'
                     }}
                   >
-                    <option value="viewer">Viewer</option>
-                    <option value="user">User</option>
-                    <option value="manager">Manager</option>
-                    {currentUser.role === 'superadmin' && <option value="admin">Admin</option>}
+                    {resolveRoleOptions(user.role).map(option => (
+                      <option key={option} value={option}>
+                        {ROLE_DISPLAY_NAMES[option] ?? option}
+                      </option>
+                    ))}
                   </select>
                 </td>
                 <td style={{ border: '1px solid #ddd', padding: '10px' }}>
-                  {(user.role === 'manager' || user.role === 'user') ? (
+                  {roleMatches(user.role, ['MANAGER','USER']) ? (
                     <select
                       value={user.department_id || ''}
-                      onChange={(e) => handleUpdateDepartment(user.id, e.target.value)}
-                      style={{ padding: '4px' }}
+                      onChange={(e) => handleUpdateUserDepartment(user.id, e.target.value || null)}
+                      style={{ padding: '6px', width: '100%' }}
                     >
-                      <option value="">-- Select --</option>
+                      <option value="">-- Unassigned --</option>
                       {departments.map(d => (
                         <option key={d.id} value={d.id}>
                           {d.name}

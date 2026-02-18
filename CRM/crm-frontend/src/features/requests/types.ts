@@ -1,0 +1,40 @@
+// 1. The Department (New Concept)
+export interface Department {
+  id: string;
+  name: string;
+  description: string | null;
+  workspace_id: string;
+}
+
+// 2. The Request (Updated)
+export interface RequestItem {
+  id: string;
+  title: string;
+  description: string | null;
+  status: "new" | "assigned" | "in_process" | "pending" | "done";
+  priority: "low" | "medium" | "high" | "critical";
+  created_at: string;
+  updated_at?: string | null;
+  created_by_id?: string | null;
+  department_id: string; // <--- New Link
+  assigned_to_id: string | null;
+  assignee?: {
+    id: string;
+    full_name: string;
+  };
+  meta_data?: Record<string, any> | null;
+}
+
+// 3. Payload to Create a Department
+export interface DepartmentCreatePayload {
+  name: string;
+  description: string;
+}
+
+// 4. Payload to Create a Request
+export interface RequestCreatePayload {
+  title: string;
+  description: string;
+  priority: string;
+  department_id: string; // <--- Mandatory now
+}
