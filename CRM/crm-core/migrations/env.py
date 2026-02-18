@@ -1,5 +1,16 @@
 # migrations/env.py
+# ... existing imports ...
+from core.database_connector import Base
 
+# --- CRITICAL: IMPORT ALL MODELS HERE ---
+# If you don't import them, Alembic thinks the app is empty.
+
+from modules.access_control.access_models import User, Workspace # <--- Ensure these are imported!
+from modules.dynamic_records.dynamic_models import *
+from modules.workflow.workflow_models import *
+from modules.notifications.notif_models import *
+from modules.file_storage.file_models import *
+# ...
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -8,7 +19,7 @@ from sqlalchemy import pool
 from alembic import context
 
 # --- FIX: Import ALL your models here ---
-from system_core.database_connector import Base  # Ensure Base is imported
+from core.database_connector import Base  # Ensure Base is imported
 # ----------------------------------------
 
 # this is the Alembic Config object, which provides
