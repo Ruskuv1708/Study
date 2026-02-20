@@ -1,10 +1,14 @@
+import { useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+
 function FilesPage() {
-  return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif' }}>
-      <h1>Files</h1>
-      <p>Files management will go here.</p>
-    </div>
-  )
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    navigate('/reports', { replace: true })
+  }, [navigate])
+
+  return null
 }
 
 export default FilesPage

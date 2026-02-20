@@ -29,11 +29,8 @@ test('login and navigate core pages', async ({ page }) => {
   await page.getByRole('button', { name: 'Forms', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Form Templates' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Files', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Files' })).toBeVisible()
-
   await page.getByRole('button', { name: 'Reports', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reports Library' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Admin', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'User Management' })).toBeVisible()

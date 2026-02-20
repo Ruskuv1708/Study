@@ -137,6 +137,40 @@ class FileStorageService:
         return file_record
 
     @staticmethod
+    def list_files(
+        db: Session,
+        workspace_id,
+        current_user=None,
+        entity_type: str | None = None,
+        entity_id=None,
+        skip: int = 0,
+        limit: int = settings.DEFAULT_PAGE_SIZE,
+    ):
+        """
+        List file metadata for a workspace with optional entity filters.
+        """
+        normalized_entity_type = FileStorageService._normalize_entity_type(entity_type)
+        limit = max(1, min(limit, settings.MAX_PAGE_SIZE))
+        skip = max(skip, 0)
+
+        query = db.query(FileAttachment).filter(FileAttachment.workspace_id == workspace_id)
+
+        if normalized_entity_type:
+            query = query.filter(FileAttachment.entity_type == normalized_entity_type)
+        if entity_id:
+            query = query.filter(FileAttachment.entity_id == entity_id)
+
+        # Non-admin users can only list files they uploaded when no entity context is provided.
+        if (
+            normalized_entity_type is None
+            and current_user is not None
+            and current_user.role not in (UserRole.SUPERADMIN, UserRole.SYSTEM_ADMIN, UserRole.ADMIN)
+        ):
+            query = query.filter(FileAttachment.uploaded_by_id == current_user.id)
+
+        return query.order_by(FileAttachment.created_at.desc()).offset(skip).limit(limit).all()
+
+    @staticmethod
     def delete_file(db: Session, file_id, workspace_id, current_user=None):
         file_record = db.query(FileAttachment).filter(
             FileAttachment.id == file_id,
@@ -222,6 +256,12 @@ class FileStorageService:
             ):
                 return
             # If current_user doesn't have uploader context here, leave enforcement
+            return
+        if entity_type == "report":
+            if current_user is None:
+                raise HTTPException(status_code=403, detail="Access denied")
+            if current_user.role not in (UserRole.SUPERADMIN, UserRole.SYSTEM_ADMIN, UserRole.ADMIN):
+                raise HTTPException(status_code=403, detail="Access denied")
             return
         if not entity_id:
             raise HTTPException(status_code=400, detail="entity_id is required when entity_type is provided")

@@ -23,6 +23,7 @@ def _serialize_request_settings(settings: Optional[RequestSettings]):
     return {
         "enabled": bool(settings.enabled),
         "department_id": str(settings.department_id) if settings.department_id else None,
+        "department_field_key": settings.department_field_key,
         "priority": settings.priority.value if hasattr(settings.priority, "value") else str(settings.priority),
         "title_template": settings.title_template,
         "description_template": settings.description_template
