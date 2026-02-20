@@ -5,6 +5,7 @@ import theme from '../../shared/theme'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import type { FormField, FormTemplate } from './types'
+import useIsMobile from '../../shared/useIsMobile'
 
 interface Department {
   id: string
@@ -68,6 +69,7 @@ function TemplateBuilderPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const isMobile = useIsMobile()
 
   const token = localStorage.getItem('crm_token')
   const isEdit = Boolean(id)
@@ -294,8 +296,8 @@ function TemplateBuilderPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="crm-page-shell" style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
+      <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0 }}>{isEdit ? 'Edit Template' : 'Create Template'}</h2>
           <div style={{ color: theme.colors.gray.text, fontSize: '13px' }}>
@@ -310,7 +312,8 @@ function TemplateBuilderPage() {
               border: `1px solid ${theme.colors.gray.border}`,
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             Back
@@ -324,7 +327,8 @@ function TemplateBuilderPage() {
               border: 'none',
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: saving ? 'not-allowed' : 'pointer'
+              cursor: saving ? 'not-allowed' : 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             {saving ? 'Saving...' : 'Save Template'}
@@ -348,11 +352,12 @@ function TemplateBuilderPage() {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: theme.spacing.lg }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: theme.spacing.lg }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
           <div style={{ fontSize: '12px', fontWeight: 700, color: theme.colors.gray.text }}>
             Select Columns
           </div>
+          <div className="crm-inline-grid-scroll">
           <div style={{
             display: 'grid',
             gridTemplateColumns: `60px repeat(${MAX_COLUMNS}, minmax(34px, 1fr))`,
@@ -384,8 +389,9 @@ function TemplateBuilderPage() {
               )
             })}
           </div>
+          </div>
 
-          <div style={{
+          <div className="crm-inline-grid-scroll" style={{
             border: `1px solid ${theme.colors.gray.border}`,
             borderRadius: theme.borderRadius.lg,
             overflow: 'auto',

@@ -7,6 +7,7 @@ import { type RequestItem } from './types';
 import { roleMatches } from '../../shared/roleLabels';
 import { getWorkspaceParams } from '../../shared/workspace';
 import type { FormTemplate, FormRecord } from '../forms/types';
+import useIsMobile from '../../shared/useIsMobile';
 
 interface Props {}
 
@@ -24,8 +25,10 @@ function RequestDetailsPage(_props: Props) {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [unassigning, setUnassigning] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false)
   const [departmentUsers, setDepartmentUsers] = useState<any[]>([])
   const [assignedDisplayName, setAssignedDisplayName] = useState<string | null>(null)
+  const isMobile = useIsMobile()
 
   // Функция для загрузки деталей конкретного запроса
   const loadRequestDetails = async (user?: any) => {
@@ -128,6 +131,24 @@ function RequestDetailsPage(_props: Props) {
       (roleMatches(currentUser.role, ['MANAGER']) && areIdsEqual(currentUser.department_id, request.department_id)))
   )
 
+  const isOwnerOrAssignee = Boolean(
+    currentUser &&
+    request &&
+    (areIdsEqual(request.created_by_id, currentUser.id) || areIdsEqual(request.assigned_to_id, currentUser.id))
+  )
+
+  const canChangeStatus = Boolean(
+    currentUser &&
+    request &&
+    !roleMatches(currentUser.role, ['VIEWER']) &&
+    (
+      roleMatches(currentUser.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN']) ||
+      (roleMatches(currentUser.role, ['MANAGER']) &&
+        (isOwnerOrAssignee || areIdsEqual(request.department_id, currentUser.department_id))) ||
+      (!roleMatches(currentUser.role, ['MANAGER']) && isOwnerOrAssignee)
+    )
+  )
+
   const fetchDepartmentUsers = async (departmentId?: string) => {
     if (!departmentId) {
       setDepartmentUsers([])
@@ -183,6 +204,30 @@ function RequestDetailsPage(_props: Props) {
     }
   }
 
+  const handleStatusChange = async (nextStatus: RequestItem['status']) => {
+    if (!request || !currentUser) return
+    if (nextStatus === request.status) return
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    setStatusUpdating(true)
+    try {
+      await axios.put(
+        `/workflow/requests/${request.id}/status`,
+        { status: nextStatus },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: getWorkspaceParams(currentUser)
+        }
+      )
+      setRequest(prev => (prev ? { ...prev, status: nextStatus } : prev))
+    } catch (err: any) {
+      console.error('Failed to update request status', err)
+      alert(err?.response?.data?.detail || 'Failed to update status')
+    } finally {
+      setStatusUpdating(false)
+    }
+  }
+
   if (loading) return <div>Loading...</div>;
 
   if (!request) return <div>Request not found!</div>;
@@ -193,9 +238,9 @@ function RequestDetailsPage(_props: Props) {
   const fields = template?.schema_structure || []
 
   return (
-    <div style={{ maxWidth: '800px', margin: 'auto', padding: '40px', fontFamily: 'Arial, sans-serif' }}>
+    <div className="crm-page-shell" style={{ maxWidth: '800px', margin: 'auto', padding: isMobile ? '16px' : '40px', fontFamily: 'Arial, sans-serif' }}>
       <Link to='/requests'>
-        <button style={{ float: 'right', background: 'none', border: 'none', padding: 0, color: 'blue', cursor: 'pointer' }}>
+        <button style={{ background: 'none', border: 'none', padding: 0, color: 'blue', cursor: 'pointer', marginBottom: '10px' }}>
           ← Back to Requests
         </button>
       </Link>
@@ -207,6 +252,29 @@ function RequestDetailsPage(_props: Props) {
           {showPriority && (<><b>Priority:</b> {request.priority}<br/></>)}
           <b>Department:</b> {request.department_id || 'N/A'}
         </p>
+        {canChangeStatus && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '12px', color: '#555' }}>Status</label>
+            <select
+              value={request.status}
+              onChange={e => handleStatusChange(e.target.value as RequestItem['status'])}
+              disabled={statusUpdating}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #d9d9d9',
+                background: '#fff',
+                cursor: statusUpdating ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <option value="new">NEW</option>
+              <option value="assigned">ASSIGNED</option>
+              <option value="in_process">IN PROCESS</option>
+              <option value="pending">PENDING</option>
+              <option value="done">DONE</option>
+            </select>
+          </div>
+        )}
           {request.assigned_to_id && (
             <div style={{ fontSize: '12px', color: '#333' }}>
               <strong>Assigned to:</strong> {assignedName}
@@ -243,7 +311,7 @@ function RequestDetailsPage(_props: Props) {
             {fields.map(field => (
               <div key={field.key} style={{
                 display: 'grid',
-                gridTemplateColumns: '180px 1fr',
+                gridTemplateColumns: isMobile ? '1fr' : '180px 1fr',
                 padding: '10px 12px',
                 borderBottom: '1px solid #f0f0f0',
                 background: '#fff'

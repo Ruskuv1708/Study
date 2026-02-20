@@ -5,6 +5,7 @@ import theme from '../../shared/theme'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import type { Department, RequestItem } from './types'
+import useIsMobile from '../../shared/useIsMobile'
 
 const normalizeUser = (user: any) => ({
   ...user,
@@ -45,6 +46,7 @@ function AssignedRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
+  const isMobile = useIsMobile()
 
   const summary = useMemo(() => {
     const newCount = requests.filter(req => req.status === 'new').length
@@ -149,8 +151,8 @@ function AssignedRequestsPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="crm-page-shell" style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
+      <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={{ margin: 0 }}>Assigned Requests</h1>
           <div style={{ color: theme.colors.gray.text, fontSize: '13px' }}>
@@ -165,6 +167,7 @@ function AssignedRequestsPage() {
             borderRadius: theme.borderRadius.md,
             padding: '8px 12px',
             cursor: 'pointer',
+            width: isMobile ? '100%' : 'auto'
           }}
         >
           All Requests

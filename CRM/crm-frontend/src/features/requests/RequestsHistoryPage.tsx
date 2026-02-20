@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { type RequestItem, type Department } from './types'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
+import useIsMobile from '../../shared/useIsMobile'
 
 const normalizeUser = (user: any) => ({
   ...user,
@@ -23,6 +24,7 @@ function RequestsHistoryPage() {
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [userNameCache, setUserNameCache] = useState<Record<string, string>>({})
+  const isMobile = useIsMobile()
 
   const fetchCurrentUser = async () => {
     const token = localStorage.getItem('crm_token')
@@ -142,8 +144,8 @@ function RequestsHistoryPage() {
   }
 
   return (
-    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "40px", fontFamily: "sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "30px" }}>
+    <div className="crm-page-shell" style={{ maxWidth: "1000px", margin: "0 auto", padding: isMobile ? "16px" : "40px", fontFamily: "sans-serif" }}>
+      <div className="crm-page-header" style={{ marginBottom: "30px" }}>
         <div>
           <h1 style={{ margin: 0 }}>Request History</h1>
           <button 
@@ -207,7 +209,7 @@ function RequestsHistoryPage() {
                         Assigned to: {assignedName}
                       </span>
                     )}
-                    <button style={{ border: "1px solid #ccc", background: "white" }} onClick={() => navigate(`/requests/${req.id}`)}>
+                    <button style={{ border: "1px solid #ccc", background: "white", width: isMobile ? '100%' : 'auto' }} onClick={() => navigate(`/requests/${req.id}`)}>
                       View Details
                     </button>
                   </div>

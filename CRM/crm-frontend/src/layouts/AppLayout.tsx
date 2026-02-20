@@ -5,6 +5,7 @@ import theme from '../shared/theme'
 import { normalizeRole, roleMatches } from '../shared/roleLabels'
 import { getWorkspaceParams } from '../shared/workspace'
 import type { RequestItem } from '../features/requests/types'
+import useIsMobile from '../shared/useIsMobile'
 
 const normalizeUserRole = (user: any) => ({
   ...user,
@@ -28,6 +29,7 @@ function AppLayout() {
   })
   const location = useLocation()
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
 
   const loadNotificationStats = async (user: any) => {
     const token = localStorage.getItem('crm_token')
@@ -89,6 +91,15 @@ function AppLayout() {
     return () => window.clearInterval(intervalId)
   }, [currentUser?.id, location.pathname])
 
+  useEffect(() => {
+    setSidebarOpen(!isMobile)
+  }, [isMobile])
+
+  useEffect(() => {
+    if (!isMobile) return
+    setSidebarOpen(false)
+  }, [location.pathname, isMobile])
+
   const menuItems = useMemo(() => {
     if (!currentUser) return []
     const base = [
@@ -116,37 +127,80 @@ function AppLayout() {
     return <div style={{ padding: '60px', textAlign: 'center' }}>Loading...</div>
   }
 
+  const sidebarWidth = sidebarOpen ? 260 : 84
+  const desktopSidebarWidth = isMobile ? 0 : sidebarWidth
+  const compactSidebar = !isMobile && !sidebarOpen
+  const handleLogout = () => {
+    localStorage.removeItem('crm_token')
+    window.location.href = '/'
+  }
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', position: 'relative' }}>
+      {isMobile && sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close menu"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 15,
+            border: 'none',
+            background: 'rgba(0,0,0,0.45)',
+            padding: 0,
+          }}
+        />
+      )}
       <div style={{
-        width: sidebarOpen ? 260 : 80,
+        width: sidebarWidth,
         backgroundColor: theme.colors.black,
         color: theme.colors.white,
         padding: theme.spacing.lg,
-        transition: 'width 0.3s',
-        borderRight: `1px solid #333`
+        transition: isMobile ? 'transform 0.25s ease' : 'width 0.3s ease',
+        borderRight: `1px solid #333`,
+        position: isMobile ? 'fixed' : 'sticky',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        zIndex: 20,
+        transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+        overflowY: 'auto'
       }}>
-        <div style={{ display: 'flex', justifyContent: sidebarOpen ? 'space-between' : 'center', alignItems: 'center', marginBottom: theme.spacing.xl }}>
-          <div style={{ fontWeight: 'bold' }}>{sidebarOpen ? 'CRM' : 'C'}</div>
+        <div style={{ display: 'flex', justifyContent: compactSidebar ? 'center' : 'space-between', alignItems: 'center', marginBottom: theme.spacing.xl }}>
+          <div style={{ fontWeight: 'bold' }}>{compactSidebar ? 'C' : 'CRM'}</div>
           <div style={{ display: 'flex', gap: '8px' }}>
+            {!isMobile && (
+              <button
+                onClick={() => setSidebarOpen(prev => !prev)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #fff',
+                  color: '#fff',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                {sidebarOpen ? '←' : '→'}
+              </button>
+            )}
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen(false)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #fff',
+                  color: '#fff',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                ✕
+              </button>
+            )}
             <button
-              onClick={() => setSidebarOpen(prev => !prev)}
-              style={{
-                background: 'transparent',
-                border: '1px solid #fff',
-                color: '#fff',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              {sidebarOpen ? '←' : '→'}
-            </button>
-            <button
-              onClick={() => {
-                localStorage.removeItem('crm_token')
-                window.location.href = '/'
-              }}
+              onClick={handleLogout}
               style={{
                 background: '#ff4d4f',
                 color: '#fff',
@@ -156,7 +210,7 @@ function AppLayout() {
                 cursor: 'pointer'
               }}
             >
-              {sidebarOpen ? 'Logout' : '⏻'}
+              {compactSidebar ? '⏻' : 'Logout'}
             </button>
           </div>
         </div>
@@ -164,36 +218,63 @@ function AppLayout() {
           {menuItems.map(item => (
             <button
               key={item.path}
-              onClick={() => navigate(item.path)}
+              onClick={() => {
+                navigate(item.path)
+                if (isMobile) {
+                  setSidebarOpen(false)
+                }
+              }}
               style={{
                 background: 'transparent',
                 border: 'none',
                 color: '#fff',
                 cursor: 'pointer',
-                textAlign: sidebarOpen ? 'left' : 'center',
+                textAlign: compactSidebar ? 'center' : 'left',
                 padding: `${theme.spacing.sm} ${theme.spacing.md}`,
                 borderRadius: theme.borderRadius.md,
                 fontSize: '14px'
               }}
             >
-              {sidebarOpen ? item.label : item.label.charAt(0)}
+              {compactSidebar ? item.label.charAt(0) : item.label}
             </button>
           ))}
         </div>
       </div>
-      <div style={{ flex: 1, backgroundColor: theme.colors.gray.lighter }}>
+      <div style={{
+        flex: 1,
+        backgroundColor: theme.colors.gray.lighter,
+        marginLeft: desktopSidebarWidth,
+        transition: 'margin-left 0.3s ease',
+        minWidth: 0,
+      }}>
         <header style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: `0 ${sidebarOpen ? theme.spacing.lg : theme.spacing.sm}`,
+          gap: theme.spacing.sm,
+          padding: `10px ${isMobile ? theme.spacing.sm : sidebarOpen ? theme.spacing.lg : theme.spacing.sm}`,
           borderBottom: '1px solid #eee',
-          height: 72,
+          minHeight: 72,
           backgroundColor: '#fff',
           position: 'sticky',
           top: 0,
           zIndex: 5
         }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                style={{
+                  background: '#fff',
+                  border: `1px solid ${theme.colors.gray.border}`,
+                  borderRadius: theme.borderRadius.md,
+                  padding: '6px 9px',
+                  cursor: 'pointer',
+                }}
+              >
+                ☰
+              </button>
+            )}
           <div>
             <strong style={{ fontSize: '16px' }}>{currentUser.full_name}</strong>
             <div style={{ fontSize: '12px', color: '#555' }}>{currentUser.role?.toUpperCase()}</div>
@@ -202,6 +283,7 @@ function AppLayout() {
               {' '}• New: <strong>{notificationsLoading ? '...' : notificationStats.newCount}</strong>
               {' '}• Pending: <strong>{notificationsLoading ? '...' : notificationStats.pending}</strong>
             </div>
+          </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <button
@@ -215,7 +297,7 @@ function AppLayout() {
                 fontSize: '12px',
               }}
             >
-              Assigned Requests: {notificationsLoading ? '...' : notificationStats.assigned}
+              {isMobile ? 'Assigned' : 'Assigned Requests'}: {notificationsLoading ? '...' : notificationStats.assigned}
             </button>
             <button
               onClick={() => navigate('/profile')}
@@ -227,11 +309,11 @@ function AppLayout() {
                 cursor: 'pointer'
               }}
             >
-              Profile
+              {isMobile ? 'Me' : 'Profile'}
             </button>
           </div>
         </header>
-        <main style={{ padding: theme.spacing.lg }}>
+        <main style={{ padding: isMobile ? theme.spacing.sm : theme.spacing.lg, minWidth: 0 }}>
           <Outlet />
         </main>
       </div>

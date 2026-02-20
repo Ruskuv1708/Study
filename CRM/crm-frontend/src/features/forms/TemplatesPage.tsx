@@ -5,6 +5,7 @@ import theme from '../../shared/theme'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import type { FormTemplate } from './types'
+import useIsMobile from '../../shared/useIsMobile'
 
 const normalizeUser = (user: any) => ({
   ...user,
@@ -17,6 +18,7 @@ function TemplatesPage() {
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const isMobile = useIsMobile()
 
   const token = localStorage.getItem('crm_token')
 
@@ -107,8 +109,8 @@ function TemplatesPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="crm-page-shell" style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
+      <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0 }}>Form Templates</h2>
           <div style={{ color: theme.colors.gray.text, fontSize: '13px' }}>
@@ -124,7 +126,8 @@ function TemplatesPage() {
               border: 'none',
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             New Template
@@ -144,6 +147,7 @@ function TemplatesPage() {
         boxShadow: theme.shadows.sm,
         overflow: 'hidden'
       }}>
+        <div className="crm-inline-grid-scroll">
         <div style={{
           display: 'grid',
           gridTemplateColumns: '2fr 1fr 1fr 280px',
@@ -175,7 +179,7 @@ function TemplatesPage() {
             <div style={{ fontWeight: 600 }}>{template.name}</div>
             <div>{template.schema_structure?.length || 0}</div>
             <div>Template</div>
-            <div style={{ display: 'flex', gap: theme.spacing.sm }}>
+            <div style={{ display: 'flex', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
               <button
                 onClick={() => navigate(`/forms/${template.id}/records`)}
                 style={{
@@ -248,6 +252,7 @@ function TemplatesPage() {
             </div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   )

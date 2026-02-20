@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import theme from '../shared/theme'
+import useIsMobile from '../shared/useIsMobile'
 
 // Define the shape of the form data
 interface WorkspaceFormData {
@@ -30,6 +31,7 @@ function WorkspaceManagementPanel() {
   })
   
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
 
   // 1. Fetch Data Function (Reusable)
   const fetchWorkspaces = (token: string) => {
@@ -130,15 +132,15 @@ function WorkspaceManagementPanel() {
   }
 
   // --- RENDER HELPERS ---
-  if (error) return <div style={{ padding: '50px', textAlign: 'center', color: theme.colors.error }}>🚫 {error}</div>
-  if (!currentUser || loading) return <div style={{ padding: '50px', textAlign: 'center' }}>Loading Superadmin Panel...</div>
+  if (error) return <div style={{ padding: isMobile ? '16px' : '50px', textAlign: 'center', color: theme.colors.error }}>🚫 {error}</div>
+  if (!currentUser || loading) return <div style={{ padding: isMobile ? '16px' : '50px', textAlign: 'center' }}>Loading Superadmin Panel...</div>
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '40px', fontFamily: 'sans-serif', position: 'relative' }}>
+    <div className="crm-page-shell" style={{ maxWidth: '1400px', margin: '0 auto', padding: isMobile ? '16px' : '40px', fontFamily: 'sans-serif', position: 'relative' }}>
       
       {/* Header */}
       <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px',
         marginBottom: '40px', paddingBottom: '20px', borderBottom: `2px solid ${theme.colors.error}`
       }}>
         <button
@@ -151,7 +153,8 @@ function WorkspaceManagementPanel() {
           cursor: 'pointer',
           fontSize: '14px',
           color: theme.colors.gray.textLight,
-          boxShadow: theme.shadows.sm
+          boxShadow: theme.shadows.sm,
+          width: isMobile ? '100%' : 'auto'
         }}
         >
           ← Back to Dashboard
@@ -161,7 +164,7 @@ function WorkspaceManagementPanel() {
           <h1 style={{ margin: 0, color: theme.colors.error }}>🔐 Superadmin Control Center</h1>
           <p style={{ color: theme.colors.gray.textLight }}>System-wide workspace management</p>
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div style={{ textAlign: isMobile ? 'left' : 'right' }}>
           <p style={{ margin: 0, fontWeight: 'bold' }}>{currentUser.full_name}</p>
           <span style={{ fontSize: '12px', background: theme.colors.error, color: 'white', padding: '2px 6px', borderRadius: '4px' }}>SUPERADMIN</span>
         </div>
@@ -174,7 +177,8 @@ function WorkspaceManagementPanel() {
           style={{
             background: theme.colors.error, color: 'white', border: 'none',
             padding: '12px 24px', borderRadius: '6px', cursor: 'pointer',
-            fontSize: '16px', fontWeight: 'bold', boxShadow: theme.shadows.md
+            fontSize: '16px', fontWeight: 'bold', boxShadow: theme.shadows.md,
+            width: isMobile ? '100%' : 'auto'
           }}
         >
           + New Workspace
@@ -186,6 +190,7 @@ function WorkspaceManagementPanel() {
         <div style={{ background: '#333', color: 'white', padding: '15px 20px', fontWeight: 'bold' }}>
           📊 Active Workspaces ({workspaces.length})
         </div>
+        <div className="crm-table-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: theme.colors.gray.light, borderBottom: '2px solid #ddd' }}>
@@ -224,24 +229,25 @@ function WorkspaceManagementPanel() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* --- CREATE WORKSPACE MODAL --- */}
       {showModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000
+          backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', justifyContent: 'center', alignItems: isMobile ? 'flex-start' : 'center', zIndex: 1000, padding: isMobile ? '16px' : '0'
         }}>
           <div style={{
             background: 'white', padding: '30px', borderRadius: '10px',
-            width: '500px', boxShadow: theme.shadows.lg, position: 'relative'
+            width: 'min(500px, 100%)', boxShadow: theme.shadows.lg, position: 'relative', marginTop: isMobile ? '20px' : 0
           }}>
             <h2 style={{ marginTop: 0, borderBottom: '1px solid #eee', paddingBottom: '15px' }}>🚀 Launch New Workspace</h2>
             
             <form onSubmit={handleCreateWorkspace} style={{ display: 'flex', flexDirection: 'column', gap: '15px', marginTop: '20px' }}>
               
               {/* Company Info */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '15px' }}>
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold', display: 'block', marginBottom: '5px' }}>Company Name</label>
                   <input required placeholder="e.g. Tesla Inc." 
@@ -283,7 +289,7 @@ function WorkspaceManagementPanel() {
               </div>
 
               {/* Buttons */}
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                 <button type="button" onClick={() => setShowModal(false)}
                   style={{ flex: 1, padding: '10px', background: '#ccc', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                   Cancel

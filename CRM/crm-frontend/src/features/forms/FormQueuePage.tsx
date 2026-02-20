@@ -5,6 +5,7 @@ import theme from '../../shared/theme'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import type { FormTemplate, FormRecord } from './types'
+import useIsMobile from '../../shared/useIsMobile'
 
 interface RequestItem {
   id: string
@@ -56,6 +57,7 @@ function FormQueuePage() {
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [departmentUsers, setDepartmentUsers] = useState<DepartmentUser[]>([])
+  const isMobile = useIsMobile()
 
   const token = localStorage.getItem('crm_token')
 
@@ -205,8 +207,8 @@ function FormQueuePage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="crm-page-shell" style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
+      <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0 }}>{template.name} - Queue</h2>
           <div style={{ color: theme.colors.gray.text, fontSize: '13px' }}>
@@ -222,7 +224,8 @@ function FormQueuePage() {
               border: 'none',
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             New Entry
@@ -234,7 +237,8 @@ function FormQueuePage() {
               border: `1px solid ${theme.colors.gray.border}`,
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             Records
@@ -246,7 +250,8 @@ function FormQueuePage() {
               border: `1px solid ${theme.colors.gray.border}`,
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             Back
@@ -266,7 +271,7 @@ function FormQueuePage() {
         </div>
       )}
 
-      <div style={{
+      <div className="crm-inline-grid-scroll" style={{
         background: '#fff',
         borderRadius: theme.borderRadius.lg,
         boxShadow: theme.shadows.sm,

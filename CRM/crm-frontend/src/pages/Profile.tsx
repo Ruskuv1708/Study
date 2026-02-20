@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import useIsMobile from '../shared/useIsMobile'
 
 const normalizeRole = (value?: string) => (value || '').toUpperCase()
 
@@ -15,6 +16,7 @@ function Profile() {
     email: ''
   })
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     const token = localStorage.getItem('crm_token')
@@ -98,7 +100,7 @@ function Profile() {
   }
 
   return (
-    <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
+    <div className="crm-page-shell" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto' }}>
       <h1>👤 My Profile</h1>
 
       {/* User Information Card */}
@@ -218,7 +220,7 @@ function Profile() {
       </div>
 
       {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '10px' }}>
+      <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
         {!editMode ? (
           <button
             onClick={() => setEditMode(true)}
@@ -228,7 +230,8 @@ function Profile() {
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             ✏️ Edit Profile
@@ -243,7 +246,8 @@ function Profile() {
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                width: isMobile ? '100%' : 'auto'
               }}
             >
               💾 Save Changes
@@ -256,7 +260,8 @@ function Profile() {
                 color: 'white',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                width: isMobile ? '100%' : 'auto'
               }}
             >
               ❌ Cancel
@@ -273,7 +278,8 @@ function Profile() {
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer',
-            marginLeft: 'auto'
+            marginLeft: isMobile ? 0 : 'auto',
+            width: isMobile ? '100%' : 'auto'
           }}
         >
           ← Back to Dashboard

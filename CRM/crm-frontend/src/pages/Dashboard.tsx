@@ -5,6 +5,7 @@ import theme from '../shared/theme'
 import { normalizeRole, roleMatches } from '../shared/roleLabels'
 import { getWorkspaceParams } from '../shared/workspace'
 import type { FormField, FormTemplate } from '../features/forms/types'
+import useIsMobile from '../shared/useIsMobile'
 
 const normalizeUserRole = (user: any) => ({
   ...user,
@@ -34,6 +35,7 @@ function Dashboard() {
   const [quickError, setQuickError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
 
   const canQuickCreate = useMemo(() => {
     return roleMatches(currentUser?.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'MANAGER', 'USER'])
@@ -206,13 +208,13 @@ function Dashboard() {
   if (!currentUser) return <div style={{ padding: '50px', textAlign: 'center' }}>No user data</div>
 
   return (
-    <div style={{ padding: theme.spacing.lg, backgroundColor: theme.colors.gray.lighter, minHeight: '100vh' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px' }}>
+    <div className="crm-page-shell" style={{ padding: theme.spacing.lg, backgroundColor: theme.colors.gray.lighter, minHeight: '100vh' }}>
+      <div className="crm-page-header" style={{ marginBottom: '30px' }}>
         <div>
           <h1 style={{ margin: 0 }}>Welcome back, {currentUser.full_name}</h1>
           <p style={{ margin: '4px 0 0', color: theme.colors.gray.text }}>Role: {currentUser.role?.toUpperCase()}</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="crm-header-actions" style={{ display: 'flex', gap: '10px' }}>
           <button
             onClick={() => navigate('/requests')}
             style={{
@@ -222,6 +224,7 @@ function Dashboard() {
               borderRadius: '6px',
               padding: '10px 18px',
               cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             View Requests
@@ -235,6 +238,7 @@ function Dashboard() {
               borderRadius: '6px',
               padding: '10px 18px',
               cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             Departments
@@ -249,10 +253,10 @@ function Dashboard() {
         </div>
         <div style={{ padding: '20px', borderRadius: '10px', background: 'white', boxShadow: theme.shadows.sm }}>
           <p style={{ margin: 0, fontSize: '12px', color: theme.colors.gray.textLight }}>Status snapshot</p>
-          <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+          <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {['new', 'assigned', 'in_process', 'pending', 'done'].map(status => (
               <span key={status} style={{
-                flex: 1,
+                flex: isMobile ? '0 0 auto' : 1,
                 padding: '6px',
                 borderRadius: '6px',
                 fontSize: '12px',
@@ -268,7 +272,7 @@ function Dashboard() {
       </div>
 
       <div style={{ background: 'white', borderRadius: '10px', padding: '20px', boxShadow: theme.shadows.md, marginBottom: '20px' }}>
-        <div style={{ marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>Quick Request Box</h2>
           <button
             onClick={() => navigate('/forms')}
@@ -278,6 +282,7 @@ function Dashboard() {
               borderRadius: '6px',
               padding: '6px 12px',
               cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             Manage Templates
@@ -358,7 +363,7 @@ function Dashboard() {
       </div>
 
       <div style={{ background: 'white', borderRadius: '10px', padding: '20px', boxShadow: theme.shadows.md }}>
-        <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0 }}>Recent Requests</h2>
           <button
             onClick={() => navigate('/requests')}
@@ -368,6 +373,7 @@ function Dashboard() {
               borderRadius: '6px',
               padding: '6px 12px',
               cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto',
             }}
           >
             Full list
@@ -378,7 +384,7 @@ function Dashboard() {
         ) : (
           <div style={{ display: 'grid', gap: '12px' }}>
             {requests.slice(0, 5).map(req => (
-              <div key={req.id} style={{ border: '1px solid #eee', borderRadius: '8px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={req.id} style={{ border: '1px solid #eee', borderRadius: '8px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
                   <strong>{req.title}</strong>
                   <p style={{ margin: '4px 0 0', color: theme.colors.gray.text }}>{req.description?.substring(0, 80) || 'No description'}</p>
