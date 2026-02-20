@@ -1,5 +1,5 @@
 from sqlalchemy import Column, ForeignKey, Index, String, Text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from core.base_models import CRMBasedModel
@@ -21,6 +21,7 @@ class Company(CRMBasedModel):
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("access_workspaces.id"), nullable=False)
 
     clients = relationship("Client", back_populates="company")
+    objects = relationship("ClientObject", back_populates="company")
 
 
 class Client(CRMBasedModel):
@@ -41,4 +42,24 @@ class Client(CRMBasedModel):
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("access_workspaces.id"), nullable=False)
 
     company = relationship("Company", back_populates="clients")
+    objects = relationship("ClientObject", back_populates="client")
 
+
+class ClientObject(CRMBasedModel):
+    __tablename__ = "registry_client_objects"
+    __table_args__ = (
+        Index("ix_registry_client_objects_workspace_id", "workspace_id"),
+        Index("ix_registry_client_objects_workspace_client", "workspace_id", "client_id"),
+        Index("ix_registry_client_objects_workspace_company", "workspace_id", "company_id"),
+        Index("ix_registry_client_objects_workspace_name", "workspace_id", "name"),
+    )
+
+    name = Column(String, nullable=False)
+    attributes = Column(JSONB, default=dict, nullable=False)
+
+    client_id = Column(UUID(as_uuid=True), ForeignKey("registry_clients.id"), nullable=True)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("registry_companies.id"), nullable=True)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("access_workspaces.id"), nullable=False)
+
+    client = relationship("Client", back_populates="objects")
+    company = relationship("Company", back_populates="objects")
