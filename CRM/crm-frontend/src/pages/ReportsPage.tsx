@@ -476,6 +476,7 @@ function ReportsPage() {
           style={{
             marginLeft: `${depth * 12}px`,
             width: `calc(100% - ${depth * 12}px)`,
+            minWidth: 0,
             border: 'none',
             background: node.fileId && selectedFileId === node.fileId ? '#e6f7ff' : 'transparent',
             borderRadius: theme.borderRadius.sm,
@@ -489,7 +490,7 @@ function ReportsPage() {
           }}
         >
           {isFolder ? (isExpanded ? '▾' : '▸') : '•'}
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {node.label}
           </span>
         </button>
@@ -719,7 +720,7 @@ function ReportsPage() {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1fr 120px 180px',
+            gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) 120px 180px',
             padding: theme.spacing.md,
             borderBottom: `1px solid ${theme.colors.gray.border}`,
             fontSize: '12px',
@@ -743,7 +744,7 @@ function ReportsPage() {
                 style={{
                   width: '100%',
                   display: 'grid',
-                  gridTemplateColumns: isMobile ? '1fr' : '1fr 120px 180px',
+                  gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) 120px 180px',
                   padding: theme.spacing.md,
                   border: 'none',
                   borderBottom: `1px solid ${theme.colors.gray.border}`,
@@ -752,17 +753,35 @@ function ReportsPage() {
                   textAlign: 'left',
                 }}
               >
-                <div style={{ fontWeight: 600 }}>
-                  {file.filename}
+                <div style={{ fontWeight: 600, minWidth: 0 }}>
+                  <div
+                    title={file.filename}
+                    style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {file.filename}
+                  </div>
                   {isMobile && (
-                    <div style={{ color: theme.colors.gray.text, fontSize: '12px', marginTop: '4px' }}>
+                    <div
+                      style={{
+                        color: theme.colors.gray.text,
+                        fontSize: '12px',
+                        marginTop: '4px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {formatBytes(file.file_size)} • {file.created_at ? new Date(file.created_at).toLocaleString() : '—'}
                     </div>
                   )}
                 </div>
-                {!isMobile && <div style={{ color: theme.colors.gray.text }}>{formatBytes(file.file_size)}</div>}
                 {!isMobile && (
-                  <div style={{ color: theme.colors.gray.text }}>
+                  <div style={{ color: theme.colors.gray.text, whiteSpace: 'nowrap' }}>
+                    {formatBytes(file.file_size)}
+                  </div>
+                )}
+                {!isMobile && (
+                  <div style={{ color: theme.colors.gray.text, whiteSpace: 'nowrap' }}>
                     {file.created_at ? new Date(file.created_at).toLocaleString() : '—'}
                   </div>
                 )}
@@ -789,11 +808,18 @@ function ReportsPage() {
             <>
               <div>
                 <div style={{ fontSize: '12px', color: theme.colors.gray.text }}>Name</div>
-                <div style={{ fontWeight: 600 }}>{selectedFile.filename}</div>
+                <div
+                  title={selectedFile.filename}
+                  style={{ fontWeight: 600, overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                >
+                  {selectedFile.filename}
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: '12px', color: theme.colors.gray.text }}>Content Type</div>
-                <div>{selectedFile.content_type || '—'}</div>
+                <div style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                  {selectedFile.content_type || '—'}
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: '12px', color: theme.colors.gray.text }}>Size</div>

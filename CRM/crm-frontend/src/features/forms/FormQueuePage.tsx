@@ -6,6 +6,7 @@ import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import type { FormTemplate, FormRecord } from './types'
 import useIsMobile from '../../shared/useIsMobile'
+import { isDepartmentField } from '../../shared/useRegistryAutocomplete'
 
 interface RequestItem {
   id: string
@@ -35,10 +36,21 @@ interface DepartmentUser {
   role?: string
 }
 
+interface Department {
+  id: string
+  name: string
+}
+
 const normalizeUser = (user: any) => ({
   ...user,
   role: normalizeRole(user.role)
 })
+
+const normalizeId = (value?: string | null): string | null => value ? value.toLowerCase() : null
+const areIdsEqual = (a?: string | null, b?: string | null) => {
+  if (!a || !b) return false
+  return normalizeId(a) === normalizeId(b)
+}
 
 const statusOptions: Array<RequestItem['status']> = [
   'new',
@@ -57,6 +69,7 @@ function FormQueuePage() {
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [departmentUsers, setDepartmentUsers] = useState<DepartmentUser[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const isMobile = useIsMobile()
 
   const token = localStorage.getItem('crm_token')
@@ -102,6 +115,20 @@ function FormQueuePage() {
     setItems(res.data || [])
   }
 
+  const fetchDepartments = async (user?: any) => {
+    if (!token) return
+    try {
+      const res = await axios.get('/workflow/departments', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: getWorkspaceParams(user || currentUser)
+      })
+      setDepartments(res.data || [])
+    } catch (err) {
+      console.warn('Unable to load departments', err)
+      setDepartments([])
+    }
+  }
+
   const fetchDepartmentUsers = async (departmentId?: string | null) => {
     if (!token || !departmentId) return
     try {
@@ -119,6 +146,7 @@ function FormQueuePage() {
       try {
         const user = await fetchCurrentUser()
         const tmpl = await fetchTemplate(user)
+        await fetchDepartments(user)
         await fetchQueue(user)
         if (tmpl?.meta_data?.request_settings?.department_id) {
           await fetchDepartmentUsers(tmpl.meta_data.request_settings.department_id)
@@ -180,6 +208,12 @@ function FormQueuePage() {
     background: theme.colors.status[status as keyof typeof theme.colors.status] || '#f0f0f0',
     color: theme.colors.statusText[status as keyof typeof theme.colors.statusText] || '#333'
   })
+
+  const getDepartmentName = (departmentId?: string | null) => {
+    if (!departmentId) return ''
+    const match = departments.find(dep => areIdsEqual(dep.id, departmentId))
+    return match?.name || departmentId
+  }
 
   if (loading) {
     return <div style={{ padding: theme.spacing.lg }}>Loading...</div>
@@ -385,7 +419,9 @@ function FormQueuePage() {
               </div>
               {columns.map(col => (
                 <div key={`${item.record.id}-${col.key}`} style={{ fontSize: '13px' }}>
-                  {String(item.record.entry_data?.[col.key] ?? '')}
+                  {isDepartmentField(col)
+                    ? getDepartmentName(String(item.record.entry_data?.[col.key] ?? ''))
+                    : String(item.record.entry_data?.[col.key] ?? '')}
                 </div>
               ))}
             </div>

@@ -6,6 +6,15 @@ import type { FormTemplate, FormField } from '../forms/types'
 import { ROLE_ASSIGNABLE, normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import useIsMobile from '../../shared/useIsMobile'
+import useRegistryAutocomplete, {
+  isClientField,
+  isCompanyField,
+  isDepartmentField,
+  isPriorityField,
+  isStatusField,
+  REQUEST_PRIORITY_OPTIONS,
+  REQUEST_STATUS_OPTIONS,
+} from '../../shared/useRegistryAutocomplete'
 
 const normalizeUser = (user: any) => ({
   ...user,
@@ -28,11 +37,17 @@ const templateHasColumn = (template: FormTemplate | null, name: string) => {
   })
 }
 
-const makeEmptyRow = (fields: FormField[]) => {
+const makeEmptyRow = (fields: FormField[], defaultDepartmentId: string = '') => {
   const row: Record<string, any> = {}
   fields.forEach(field => {
     if (field.type === 'boolean') {
       row[field.key] = false
+    } else if (isStatusField(field)) {
+      row[field.key] = REQUEST_STATUS_OPTIONS[0].value
+    } else if (isPriorityField(field)) {
+      row[field.key] = 'medium'
+    } else if (isDepartmentField(field)) {
+      row[field.key] = defaultDepartmentId
     } else {
       row[field.key] = ''
     }
@@ -60,6 +75,7 @@ function RequestsPage() {
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const isMobile = useIsMobile()
+  const { companyNames, clientNames } = useRegistryAutocomplete(currentUser)
 
   const templateFromQuery = useMemo(() => {
     const params = new URLSearchParams(location.search)
@@ -241,16 +257,16 @@ function RequestsPage() {
   useEffect(() => {
     if (!selectedTemplate) return
     setSelectedTemplateId(selectedTemplate.id)
-    setRows([makeEmptyRow(selectedFields)])
+    setRows([makeEmptyRow(selectedFields, departments[0]?.id || '')])
     setRowErrors({})
-  }, [selectedTemplate?.id])
+  }, [selectedTemplate?.id, departments[0]?.id])
 
   const updateValue = (rowIndex: number, key: string, value: any) => {
     setRows(prev => prev.map((row, index) => index === rowIndex ? { ...row, [key]: value } : row))
   }
 
   const addRow = () => {
-    setRows(prev => [...prev, makeEmptyRow(selectedFields)])
+    setRows(prev => [...prev, makeEmptyRow(selectedFields, departments[0]?.id || '')])
   }
 
   const removeRow = (rowIndex: number) => {
@@ -269,6 +285,12 @@ function RequestsPage() {
       }
       if (field.type === 'boolean') {
         data[field.key] = Boolean(value)
+        return
+      }
+      if (isDepartmentField(field) && (value === '' || value === null || typeof value === 'undefined')) {
+        if (departments[0]?.id) {
+          data[field.key] = departments[0].id
+        }
         return
       }
       if (value === '' && !field.required) return
@@ -317,7 +339,7 @@ function RequestsPage() {
         })
       }
       setIsCreating(false)
-      setRows([makeEmptyRow(selectedFields)])
+      setRows([makeEmptyRow(selectedFields, departments[0]?.id || '')])
       fetchData()
     } catch (err: any) {
       console.error(err)
@@ -538,6 +560,21 @@ function RequestsPage() {
                 </button>
               </div>
 
+              {companyNames.length > 0 && (
+                <datalist id="registry-company-options">
+                  {companyNames.map(name => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              )}
+              {clientNames.length > 0 && (
+                <datalist id="registry-client-options">
+                  {clientNames.map(name => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              )}
+
               <div style={{
                 border: "1px solid #e0e0e0",
                 borderRadius: "8px",
@@ -581,11 +618,49 @@ function RequestsPage() {
                             />
                             Yes / No
                           </label>
+                        ) : isStatusField(field) ? (
+                          <select
+                            value={row[field.key] || REQUEST_STATUS_OPTIONS[0].value}
+                            onChange={e => updateValue(rowIndex, field.key, e.target.value)}
+                            style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0e0e0" }}
+                          >
+                            {REQUEST_STATUS_OPTIONS.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        ) : isPriorityField(field) ? (
+                          <select
+                            value={row[field.key] || 'medium'}
+                            onChange={e => updateValue(rowIndex, field.key, e.target.value)}
+                            style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0e0e0" }}
+                          >
+                            {REQUEST_PRIORITY_OPTIONS.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        ) : isDepartmentField(field) ? (
+                          <select
+                            value={row[field.key] || (departments[0]?.id || '')}
+                            onChange={e => updateValue(rowIndex, field.key, e.target.value)}
+                            style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0e0e0" }}
+                          >
+                            {departments.length === 0 && <option value="">No departments</option>}
+                            {departments.map(dep => (
+                              <option key={dep.id} value={dep.id}>{dep.name}</option>
+                            ))}
+                          </select>
                         ) : (
                           <input
                             type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
                             value={row[field.key] ?? ''}
                             onChange={e => updateValue(rowIndex, field.key, e.target.value)}
+                            list={
+                              isCompanyField(field)
+                                ? 'registry-company-options'
+                                : isClientField(field)
+                                  ? 'registry-client-options'
+                                  : undefined
+                            }
                             style={{ width: "100%", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0e0e0" }}
                           />
                         )}

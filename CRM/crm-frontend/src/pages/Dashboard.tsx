@@ -6,17 +6,32 @@ import { normalizeRole, roleMatches } from '../shared/roleLabels'
 import { getWorkspaceParams } from '../shared/workspace'
 import type { FormField, FormTemplate } from '../features/forms/types'
 import useIsMobile from '../shared/useIsMobile'
+import useRegistryAutocomplete, {
+  isClientField,
+  isCompanyField,
+  isDepartmentField,
+  isPriorityField,
+  isStatusField,
+  REQUEST_PRIORITY_OPTIONS,
+  REQUEST_STATUS_OPTIONS,
+} from '../shared/useRegistryAutocomplete'
 
 const normalizeUserRole = (user: any) => ({
   ...user,
   role: normalizeRole(user.role),
 })
 
-const makeEmptyPayload = (fields: FormField[]) => {
+const makeEmptyPayload = (fields: FormField[], defaultDepartmentId: string = '') => {
   const next: Record<string, any> = {}
   fields.forEach(field => {
     if (field.type === 'boolean') {
       next[field.key] = false
+    } else if (isStatusField(field)) {
+      next[field.key] = REQUEST_STATUS_OPTIONS[0].value
+    } else if (isPriorityField(field)) {
+      next[field.key] = 'medium'
+    } else if (isDepartmentField(field)) {
+      next[field.key] = defaultDepartmentId
     } else {
       next[field.key] = ''
     }
@@ -28,6 +43,7 @@ function Dashboard() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [requests, setRequests] = useState<any[]>([])
   const [templates, setTemplates] = useState<FormTemplate[]>([])
+  const [departments, setDepartments] = useState<any[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [quickPayload, setQuickPayload] = useState<Record<string, any>>({})
   const [quickSubmitting, setQuickSubmitting] = useState(false)
@@ -36,6 +52,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
   const isMobile = useIsMobile()
+  const { companyNames, clientNames } = useRegistryAutocomplete(currentUser)
 
   const canQuickCreate = useMemo(() => {
     return roleMatches(currentUser?.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'MANAGER', 'USER'])
@@ -48,6 +65,23 @@ function Dashboard() {
   }, [templates, selectedTemplateId])
 
   const quickFields = useMemo<FormField[]>(() => selectedTemplate?.schema_structure || [], [selectedTemplate])
+  const departmentNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    departments.forEach(dep => {
+      if (!dep?.id || !dep?.name) return
+      map.set(String(dep.id).toLowerCase(), String(dep.name))
+    })
+    return map
+  }, [departments])
+  const recentRequests = useMemo(() => {
+    return [...requests]
+      .sort((a, b) => {
+        const aTime = new Date(a?.created_at || a?.updated_at || 0).getTime()
+        const bTime = new Date(b?.created_at || b?.updated_at || 0).getTime()
+        return bTime - aTime
+      })
+      .slice(0, 20)
+  }, [requests])
 
   useEffect(() => {
     const token = localStorage.getItem('crm_token')
@@ -66,7 +100,7 @@ function Dashboard() {
       const canLoadTemplates = roleMatches(normalized.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'MANAGER', 'USER'])
 
       try {
-        const [reqRes, templateRes] = await Promise.all([
+        const [reqRes, templateRes, departmentRes] = await Promise.all([
           axios.get('/workflow/requests', {
             headers: { Authorization: `Bearer ${token}` },
             params,
@@ -77,10 +111,17 @@ function Dashboard() {
                 params,
               })
             : Promise.resolve({ data: [] }),
+          canLoadTemplates
+            ? axios.get('/workflow/departments', {
+                headers: { Authorization: `Bearer ${token}` },
+                params,
+              })
+            : Promise.resolve({ data: [] }),
         ])
         setRequests(reqRes.data)
         const loadedTemplates: FormTemplate[] = Array.isArray(templateRes.data) ? templateRes.data : []
         setTemplates(loadedTemplates)
+        setDepartments(Array.isArray(departmentRes.data) ? departmentRes.data : [])
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err)
       } finally {
@@ -100,10 +141,10 @@ function Dashboard() {
       return
     }
     setSelectedTemplateId(selectedTemplate.id)
-    setQuickPayload(makeEmptyPayload(selectedTemplate.schema_structure || []))
+    setQuickPayload(makeEmptyPayload(selectedTemplate.schema_structure || [], departments[0]?.id || ''))
     setQuickMessage(null)
     setQuickError(null)
-  }, [selectedTemplate?.id])
+  }, [selectedTemplate?.id, departments[0]?.id])
 
   const getStatusColor = (status: string) => {
     return theme.colors.status[status as keyof typeof theme.colors.status] || theme.colors.gray.light
@@ -111,6 +152,11 @@ function Dashboard() {
 
   const getStatusTextColor = (status: string) => {
     return theme.colors.statusText[status as keyof typeof theme.colors.statusText] || '#333'
+  }
+
+  const getDepartmentName = (departmentId?: string | null) => {
+    if (!departmentId) return '—'
+    return departmentNameMap.get(String(departmentId).toLowerCase()) || '—'
   }
 
   const updateQuickValue = (field: FormField, value: any) => {
@@ -141,6 +187,12 @@ function Dashboard() {
       }
       if (field.type === 'boolean') {
         data[field.key] = Boolean(value)
+        return
+      }
+      if (isDepartmentField(field) && (value === '' || value === null || typeof value === 'undefined')) {
+        if (departments[0]?.id) {
+          data[field.key] = departments[0].id
+        }
         return
       }
       if (value === '' && !field.required) {
@@ -193,7 +245,7 @@ function Dashboard() {
       })
 
       setQuickMessage('Request submitted successfully')
-      setQuickPayload(makeEmptyPayload(quickFields))
+      setQuickPayload(makeEmptyPayload(quickFields, departments[0]?.id || ''))
       await refreshRequests()
     } catch (err: any) {
       console.error('Failed to submit request:', err)
@@ -208,11 +260,11 @@ function Dashboard() {
   if (!currentUser) return <div style={{ padding: '50px', textAlign: 'center' }}>No user data</div>
 
   return (
-    <div className="crm-page-shell" style={{ padding: theme.spacing.lg, backgroundColor: theme.colors.gray.lighter, minHeight: '100vh' }}>
-      <div className="crm-page-header" style={{ marginBottom: '30px' }}>
+    <div className="crm-page-shell" style={{ padding: theme.spacing.md, backgroundColor: theme.colors.gray.lighter, minHeight: '100vh' }}>
+      <div className="crm-page-header" style={{ marginBottom: theme.spacing.md }}>
         <div>
-          <h1 style={{ margin: 0 }}>Welcome back, {currentUser.full_name}</h1>
-          <p style={{ margin: '4px 0 0', color: theme.colors.gray.text }}>Role: {currentUser.role?.toUpperCase()}</p>
+          <h1 style={{ margin: 0, fontSize: isMobile ? '24px' : '30px', lineHeight: 1.1 }}>Welcome back, {currentUser.full_name}</h1>
+          <p style={{ margin: '2px 0 0', color: theme.colors.gray.text, fontSize: '12px' }}>Role: {currentUser.role?.toUpperCase()}</p>
         </div>
         <div className="crm-header-actions" style={{ display: 'flex', gap: '10px' }}>
           <button
@@ -222,7 +274,7 @@ function Dashboard() {
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              padding: '10px 18px',
+              padding: '8px 14px',
               cursor: 'pointer',
               width: isMobile ? '100%' : 'auto',
             }}
@@ -236,7 +288,7 @@ function Dashboard() {
               color: 'white',
               border: 'none',
               borderRadius: '6px',
-              padding: '10px 18px',
+              padding: '8px 14px',
               cursor: 'pointer',
               width: isMobile ? '100%' : 'auto',
             }}
@@ -246,20 +298,20 @@ function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '30px' }}>
-        <div style={{ padding: '20px', borderRadius: '10px', background: 'white', boxShadow: theme.shadows.sm }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '12px' }}>
+        <div style={{ padding: '14px', borderRadius: '10px', background: 'white', boxShadow: theme.shadows.sm }}>
           <p style={{ margin: 0, fontSize: '12px', color: theme.colors.gray.textLight }}>Open requests</p>
-          <h2 style={{ margin: '6px 0 0' }}>{requests.length}</h2>
+          <h2 style={{ margin: '4px 0 0', lineHeight: 1 }}>{requests.length}</h2>
         </div>
-        <div style={{ padding: '20px', borderRadius: '10px', background: 'white', boxShadow: theme.shadows.sm }}>
+        <div style={{ padding: '14px', borderRadius: '10px', background: 'white', boxShadow: theme.shadows.sm }}>
           <p style={{ margin: 0, fontSize: '12px', color: theme.colors.gray.textLight }}>Status snapshot</p>
-          <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ marginTop: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
             {['new', 'assigned', 'in_process', 'pending', 'done'].map(status => (
               <span key={status} style={{
                 flex: isMobile ? '0 0 auto' : 1,
-                padding: '6px',
+                padding: '5px',
                 borderRadius: '6px',
-                fontSize: '12px',
+                fontSize: '11px',
                 background: getStatusColor(status),
                 color: getStatusTextColor(status),
                 textAlign: 'center',
@@ -271,16 +323,16 @@ function Dashboard() {
         </div>
       </div>
 
-      <div style={{ background: 'white', borderRadius: '10px', padding: '20px', boxShadow: theme.shadows.md, marginBottom: '20px' }}>
-        <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0 }}>Quick Request Box</h2>
+      <div style={{ background: 'white', borderRadius: '10px', padding: '14px', boxShadow: theme.shadows.md, marginBottom: '12px' }}>
+        <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: '24px' }}>Quick Request</h2>
           <button
             onClick={() => navigate('/forms')}
             style={{
               background: 'transparent',
               border: '1px solid #ccc',
               borderRadius: '6px',
-              padding: '6px 12px',
+              padding: '6px 10px',
               cursor: 'pointer',
               width: isMobile ? '100%' : 'auto',
             }}
@@ -294,13 +346,13 @@ function Dashboard() {
         ) : templates.length === 0 ? (
           <p style={{ color: theme.colors.gray.text }}>No templates available. Create one in Forms first.</p>
         ) : (
-          <form onSubmit={submitQuickRequest} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <form onSubmit={submitQuickRequest} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: theme.colors.gray.text }}>Template</label>
               <select
                 value={selectedTemplate?.id || ''}
                 onChange={e => setSelectedTemplateId(e.target.value)}
-                style={{ width: '100%', marginTop: '6px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
+                style={{ width: '100%', marginTop: '4px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #ddd' }}
               >
                 {templates.map(template => (
                   <option key={template.id} value={template.id}>{template.name}</option>
@@ -308,7 +360,22 @@ function Dashboard() {
               </select>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+            {companyNames.length > 0 && (
+              <datalist id="dashboard-registry-company-options">
+                {companyNames.map(name => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            )}
+            {clientNames.length > 0 && (
+              <datalist id="dashboard-registry-client-options">
+                {clientNames.map(name => (
+                  <option key={name} value={name} />
+                ))}
+              </datalist>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
               {quickFields.map(field => (
                 <div key={field.key}>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: theme.colors.gray.text }}>
@@ -323,12 +390,50 @@ function Dashboard() {
                       />
                       <span style={{ fontSize: '13px', color: theme.colors.gray.text }}>Yes / No</span>
                     </label>
+                  ) : isStatusField(field) ? (
+                    <select
+                      value={quickPayload[field.key] || REQUEST_STATUS_OPTIONS[0].value}
+                      onChange={e => updateQuickValue(field, e.target.value)}
+                      style={{ width: '100%', marginTop: '4px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    >
+                      {REQUEST_STATUS_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  ) : isPriorityField(field) ? (
+                    <select
+                      value={quickPayload[field.key] || 'medium'}
+                      onChange={e => updateQuickValue(field, e.target.value)}
+                      style={{ width: '100%', marginTop: '4px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    >
+                      {REQUEST_PRIORITY_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  ) : isDepartmentField(field) ? (
+                    <select
+                      value={quickPayload[field.key] || (departments[0]?.id || '')}
+                      onChange={e => updateQuickValue(field, e.target.value)}
+                      style={{ width: '100%', marginTop: '4px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    >
+                      {departments.length === 0 && <option value="">No departments</option>}
+                      {departments.map(dep => (
+                        <option key={dep.id} value={dep.id}>{dep.name}</option>
+                      ))}
+                    </select>
                   ) : (
                     <input
                       type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
                       value={quickPayload[field.key] ?? ''}
                       onChange={e => updateQuickValue(field, e.target.value)}
-                      style={{ width: '100%', marginTop: '6px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
+                      list={
+                        isCompanyField(field)
+                          ? 'dashboard-registry-company-options'
+                          : isClientField(field)
+                            ? 'dashboard-registry-client-options'
+                            : undefined
+                      }
+                      style={{ width: '100%', marginTop: '4px', padding: '8px 10px', borderRadius: '6px', border: '1px solid #ddd' }}
                     />
                   )}
                 </div>
@@ -351,7 +456,7 @@ function Dashboard() {
                   color: 'white',
                   border: 'none',
                   borderRadius: '6px',
-                  padding: '10px 16px',
+                  padding: '8px 14px',
                   cursor: quickSubmitting ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -362,16 +467,16 @@ function Dashboard() {
         )}
       </div>
 
-      <div style={{ background: 'white', borderRadius: '10px', padding: '20px', boxShadow: theme.shadows.md }}>
-        <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0 }}>Recent Requests</h2>
+      <div style={{ background: 'white', borderRadius: '10px', padding: '14px', boxShadow: theme.shadows.md }}>
+        <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: '24px' }}>Recent Requests ({recentRequests.length})</h2>
           <button
             onClick={() => navigate('/requests')}
             style={{
               background: 'transparent',
               border: '1px solid #ccc',
               borderRadius: '6px',
-              padding: '6px 12px',
+              padding: '6px 10px',
               cursor: 'pointer',
               width: isMobile ? '100%' : 'auto',
             }}
@@ -379,27 +484,85 @@ function Dashboard() {
             Full list
           </button>
         </div>
-        {requests.length === 0 ? (
-          <p style={{ color: theme.colors.gray.text }}>No requests yet.</p>
+        {recentRequests.length === 0 ? (
+          <p style={{ color: theme.colors.gray.text, margin: 0 }}>No requests yet.</p>
         ) : (
-          <div style={{ display: 'grid', gap: '12px' }}>
-            {requests.slice(0, 5).map(req => (
-              <div key={req.id} style={{ border: '1px solid #eee', borderRadius: '8px', padding: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                  <strong>{req.title}</strong>
-                  <p style={{ margin: '4px 0 0', color: theme.colors.gray.text }}>{req.description?.substring(0, 80) || 'No description'}</p>
-                </div>
-                <span style={{
-                  background: getStatusColor(req.status),
-                  color: getStatusTextColor(req.status),
-                  padding: '6px 10px',
-                  borderRadius: '999px',
-                  fontSize: '12px',
-                }}>
-                  {req.status.replace('_', ' ').toUpperCase()}
-                </span>
-              </div>
-            ))}
+          <div className="crm-inline-grid-scroll" style={{ border: '1px solid #eee', borderRadius: '8px', overflow: 'auto' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1.8fr) 130px 150px 180px',
+              padding: '8px 10px',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: theme.colors.gray.text,
+              borderBottom: '1px solid #eee',
+              background: '#fafafa',
+            }}>
+              <div>Request</div>
+              {!isMobile && <div>Status</div>}
+              {!isMobile && <div>Department</div>}
+              {!isMobile && <div>Created</div>}
+            </div>
+            <div style={{ maxHeight: isMobile ? 'none' : '420px', overflow: 'auto' }}>
+              {recentRequests.map(req => (
+                <button
+                  key={req.id}
+                  onClick={() => navigate(`/requests/${req.id}`)}
+                  style={{
+                    width: '100%',
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'minmax(0, 1.8fr) 130px 150px 180px',
+                    padding: '8px 10px',
+                    border: 'none',
+                    borderBottom: '1px solid #f0f0f0',
+                    background: '#fff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    alignItems: 'center',
+                    gap: isMobile ? '4px' : '8px',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {req.title || 'Untitled request'}
+                    </div>
+                    <div style={{ color: theme.colors.gray.text, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {req.description || 'No description'}
+                    </div>
+                    {isMobile && (
+                      <div style={{ color: theme.colors.gray.text, fontSize: '11px', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {req.status?.replace('_', ' ').toUpperCase()} • {getDepartmentName(req.department_id)} • {req.created_at ? new Date(req.created_at).toLocaleString() : '—'}
+                      </div>
+                    )}
+                  </div>
+                  {!isMobile && (
+                    <div>
+                      <span style={{
+                        display: 'inline-block',
+                        background: getStatusColor(req.status),
+                        color: getStatusTextColor(req.status),
+                        padding: '4px 8px',
+                        borderRadius: '999px',
+                        fontSize: '11px',
+                        lineHeight: 1,
+                      }}>
+                        {req.status?.replace('_', ' ').toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  {!isMobile && (
+                    <div style={{ color: theme.colors.gray.text, fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {getDepartmentName(req.department_id)}
+                    </div>
+                  )}
+                  {!isMobile && (
+                    <div style={{ color: theme.colors.gray.text, fontSize: '12px', whiteSpace: 'nowrap' }}>
+                      {req.created_at ? new Date(req.created_at).toLocaleString() : '—'}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

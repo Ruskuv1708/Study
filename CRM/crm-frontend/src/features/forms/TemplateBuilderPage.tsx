@@ -6,6 +6,7 @@ import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import type { FormField, FormTemplate } from './types'
 import useIsMobile from '../../shared/useIsMobile'
+import { isClientField, isCompanyField, isPriorityField, isStatusField } from '../../shared/useRegistryAutocomplete'
 
 interface Department {
   id: string
@@ -34,15 +35,6 @@ const makeKeyFromLabel = (label: string) => {
     .trim()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
-}
-
-const hasColumn = (columns: FormField[], name: string) => {
-  const lower = name.toLowerCase()
-  return columns.some(field => {
-    const key = (field.key || '').toLowerCase()
-    const label = (field.label || '').toLowerCase()
-    return key === lower || label === lower
-  })
 }
 
 const findDepartmentColumn = (columns: FormField[]) => {
@@ -80,8 +72,10 @@ function TemplateBuilderPage() {
   }, [currentUser])
 
   const selectedField = useMemo(() => columns[selectedColumn] || emptyField(), [columns, selectedColumn])
-  const hasStatusColumn = useMemo(() => hasColumn(columns, 'status'), [columns])
-  const hasPriorityColumn = useMemo(() => hasColumn(columns, 'priority'), [columns])
+  const hasStatusColumn = useMemo(() => columns.some(field => isStatusField(field)), [columns])
+  const hasPriorityColumn = useMemo(() => columns.some(field => isPriorityField(field)), [columns])
+  const hasCompanyColumn = useMemo(() => columns.some(field => isCompanyField(field)), [columns])
+  const hasClientColumn = useMemo(() => columns.some(field => isClientField(field)), [columns])
   const departmentColumn = useMemo(() => findDepartmentColumn(columns), [columns])
   const hasDepartmentColumn = Boolean(departmentColumn)
 
@@ -214,11 +208,23 @@ function TemplateBuilderPage() {
 
   const removeColumnByKey = (key: string) => {
     const lower = key.toLowerCase()
-    const idx = columns.findIndex(field => {
+    let idx = columns.findIndex(field => {
       const fieldKey = (field.key || '').toLowerCase()
       const fieldLabel = (field.label || '').toLowerCase()
       return fieldKey === lower || fieldLabel === lower
     })
+    if (idx === -1 && lower === 'company') {
+      idx = columns.findIndex(field => isCompanyField(field))
+    }
+    if (idx === -1 && lower === 'client') {
+      idx = columns.findIndex(field => isClientField(field))
+    }
+    if (idx === -1 && lower === 'status') {
+      idx = columns.findIndex(field => isStatusField(field))
+    }
+    if (idx === -1 && lower === 'priority') {
+      idx = columns.findIndex(field => isPriorityField(field))
+    }
     if (idx === -1) return
     if (!window.confirm(`Remove ${key} column?`)) return
     const next = columns.filter((_, index) => index !== idx)
@@ -304,7 +310,7 @@ function TemplateBuilderPage() {
             Select the column area and define headers like a spreadsheet.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: theme.spacing.sm }}>
+        <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', gap: theme.spacing.sm }}>
           <button
             onClick={() => navigate('/forms')}
             style={{
@@ -352,8 +358,8 @@ function TemplateBuilderPage() {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 320px', gap: theme.spacing.lg }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(280px, 320px)', gap: theme.spacing.lg }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm, minWidth: 0 }}>
           <div style={{ fontSize: '12px', fontWeight: 700, color: theme.colors.gray.text }}>
             Select Columns
           </div>
@@ -363,7 +369,9 @@ function TemplateBuilderPage() {
             gridTemplateColumns: `60px repeat(${MAX_COLUMNS}, minmax(34px, 1fr))`,
             border: `1px solid ${theme.colors.gray.border}`,
             borderRadius: theme.borderRadius.md,
-            overflow: 'hidden'
+            overflow: 'hidden',
+            width: 'max-content',
+            minWidth: '100%',
           }}>
             <div style={{ background: theme.colors.gray.light, borderRight: `1px solid ${theme.colors.gray.border}` }} />
             {COLUMN_LETTERS.map((letter, index) => {
@@ -395,7 +403,8 @@ function TemplateBuilderPage() {
             border: `1px solid ${theme.colors.gray.border}`,
             borderRadius: theme.borderRadius.lg,
             overflow: 'auto',
-            background: '#fff'
+            background: '#fff',
+            minWidth: 0,
           }}>
             <div style={{
               display: 'grid',
@@ -403,7 +412,9 @@ function TemplateBuilderPage() {
               borderBottom: `1px solid ${theme.colors.gray.border}`,
               background: theme.colors.gray.light,
               fontSize: '12px',
-              fontWeight: 700
+              fontWeight: 700,
+              width: 'max-content',
+              minWidth: '100%',
             }}>
               <div style={{ padding: '8px', borderRight: `1px solid ${theme.colors.gray.border}` }} />
               {Array.from({ length: columnCount }).map((_, colIndex) => (
@@ -425,7 +436,9 @@ function TemplateBuilderPage() {
                 style={{
                   display: 'grid',
                   gridTemplateColumns: `60px repeat(${columnCount}, minmax(160px, 1fr))`,
-                  borderBottom: rowIndex === VISIBLE_ROWS - 1 ? 'none' : `1px solid ${theme.colors.gray.border}`
+                  borderBottom: rowIndex === VISIBLE_ROWS - 1 ? 'none' : `1px solid ${theme.colors.gray.border}`,
+                  width: 'max-content',
+                  minWidth: '100%',
                 }}
               >
                 <div style={{
@@ -475,7 +488,7 @@ function TemplateBuilderPage() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.md }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.md, minWidth: 0 }}>
           <div style={{
             background: '#fff',
             borderRadius: theme.borderRadius.lg,
@@ -492,7 +505,7 @@ function TemplateBuilderPage() {
                   checked={hasStatusColumn}
                   onChange={e => {
                     if (e.target.checked) {
-                      ensureColumn('status', 'Status')
+                      ensureColumn('status', 'Status', { type: 'status_select' })
                     } else {
                       removeColumnByKey('status')
                     }
@@ -506,7 +519,7 @@ function TemplateBuilderPage() {
                   checked={hasPriorityColumn}
                   onChange={e => {
                     if (e.target.checked) {
-                      ensureColumn('priority', 'Priority')
+                      ensureColumn('priority', 'Priority', { type: 'priority_select' })
                     } else {
                       removeColumnByKey('priority')
                     }
@@ -527,6 +540,34 @@ function TemplateBuilderPage() {
                   }}
                 />
                 Include Department column
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                <input
+                  type="checkbox"
+                  checked={hasCompanyColumn}
+                  onChange={e => {
+                    if (e.target.checked) {
+                      ensureColumn('company', 'Company', { type: 'company_select' })
+                    } else {
+                      removeColumnByKey('company')
+                    }
+                  }}
+                />
+                Include Company column
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                <input
+                  type="checkbox"
+                  checked={hasClientColumn}
+                  onChange={e => {
+                    if (e.target.checked) {
+                      ensureColumn('client', 'Client', { type: 'client_select' })
+                    } else {
+                      removeColumnByKey('client')
+                    }
+                  }}
+                />
+                Include Client column
               </label>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
@@ -578,6 +619,10 @@ function TemplateBuilderPage() {
                   <option value="boolean">Yes/No</option>
                   <option value="date">Date</option>
                   <option value="department_select">Department Select</option>
+                  <option value="status_select">Status Select</option>
+                  <option value="priority_select">Priority Select</option>
+                  <option value="company_select">Company Select</option>
+                  <option value="client_select">Client Select</option>
                 </select>
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>

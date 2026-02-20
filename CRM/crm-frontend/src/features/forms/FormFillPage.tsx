@@ -6,17 +6,32 @@ import type { FormTemplate, FormField } from './types'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import useIsMobile from '../../shared/useIsMobile'
+import useRegistryAutocomplete, {
+  isClientField,
+  isCompanyField,
+  isDepartmentField,
+  isPriorityField,
+  isStatusField,
+  REQUEST_PRIORITY_OPTIONS,
+  REQUEST_STATUS_OPTIONS,
+} from '../../shared/useRegistryAutocomplete'
 
 const normalizeUser = (user: any) => ({
   ...user,
   role: normalizeRole(user.role)
 })
 
-const makeEmptyRow = (fields: FormField[]) => {
+const makeEmptyRow = (fields: FormField[], defaultDepartmentId: string = '') => {
   const row: Record<string, any> = {}
   fields.forEach(field => {
     if (field.type === 'boolean') {
       row[field.key] = false
+    } else if (isStatusField(field)) {
+      row[field.key] = REQUEST_STATUS_OPTIONS[0].value
+    } else if (isPriorityField(field)) {
+      row[field.key] = 'medium'
+    } else if (isDepartmentField(field)) {
+      row[field.key] = defaultDepartmentId
     } else {
       row[field.key] = ''
     }
@@ -29,12 +44,14 @@ function FormFillPage() {
   const { id } = useParams<{ id: string }>()
   const [template, setTemplate] = useState<FormTemplate | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [departments, setDepartments] = useState<any[]>([])
   const [rows, setRows] = useState<Array<Record<string, any>>>([])
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const isMobile = useIsMobile()
+  const { companyNames, clientNames } = useRegistryAutocomplete(currentUser)
 
   const token = localStorage.getItem('crm_token')
 
@@ -62,7 +79,8 @@ function FormFillPage() {
         params: getWorkspaceParams(user || currentUser)
       })
       setTemplate(res.data)
-      const initialRow = makeEmptyRow(res.data.schema_structure || [])
+      const defaultDepartmentId = user?.department_id || departments[0]?.id || ''
+      const initialRow = makeEmptyRow(res.data.schema_structure || [], defaultDepartmentId)
       setRows([initialRow])
     } catch (err: any) {
       console.error(err)
@@ -72,10 +90,22 @@ function FormFillPage() {
     }
   }
 
+  const fetchDepartments = async (user?: any) => {
+    if (!token) return
+    const res = await axios.get('/workflow/departments', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: getWorkspaceParams(user || currentUser)
+    })
+    setDepartments(res.data || [])
+    return res.data || []
+  }
+
   useEffect(() => {
     ;(async () => {
       const user = await fetchCurrentUser()
-      await fetchTemplate(user)
+      const loadedDepartments = await fetchDepartments(user)
+      const defaultDepartmentId = user?.department_id || loadedDepartments?.[0]?.id || ''
+      await fetchTemplate({ ...user, department_id: defaultDepartmentId })
     })()
   }, [id])
 
@@ -96,6 +126,12 @@ function FormFillPage() {
         data[field.key] = Boolean(value)
         return
       }
+      if (isDepartmentField(field) && (value === '' || value === null || typeof value === 'undefined')) {
+        if (departments[0]?.id) {
+          data[field.key] = departments[0].id
+        }
+        return
+      }
       if (value === '' && !field.required) return
       data[field.key] = value
     })
@@ -114,7 +150,8 @@ function FormFillPage() {
   }
 
   const addRow = () => {
-    setRows(prev => [...prev, makeEmptyRow(fields)])
+    const defaultDepartmentId = currentUser?.department_id || departments[0]?.id || ''
+    setRows(prev => [...prev, makeEmptyRow(fields, defaultDepartmentId)])
   }
 
   const removeRow = (rowIndex: number) => {
@@ -255,6 +292,21 @@ function FormFillPage() {
           </button>
         </div>
 
+        {companyNames.length > 0 && (
+          <datalist id="form-fill-registry-company-options">
+            {companyNames.map(name => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        )}
+        {clientNames.length > 0 && (
+          <datalist id="form-fill-registry-client-options">
+            {clientNames.map(name => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        )}
+
         <div className="crm-inline-grid-scroll" style={{
           border: `1px solid ${theme.colors.gray.border}`,
           borderRadius: theme.borderRadius.lg,
@@ -302,11 +354,64 @@ function FormFillPage() {
                       />
                       <span style={{ fontSize: '12px', color: theme.colors.gray.text }}>Yes / No</span>
                     </label>
+                  ) : isStatusField(field) ? (
+                    <select
+                      value={row[field.key] || REQUEST_STATUS_OPTIONS[0].value}
+                      onChange={e => updateValue(rowIndex, field.key, e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: theme.borderRadius.sm,
+                        border: `1px solid ${theme.colors.gray.border}`
+                      }}
+                    >
+                      {REQUEST_STATUS_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  ) : isPriorityField(field) ? (
+                    <select
+                      value={row[field.key] || 'medium'}
+                      onChange={e => updateValue(rowIndex, field.key, e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: theme.borderRadius.sm,
+                        border: `1px solid ${theme.colors.gray.border}`
+                      }}
+                    >
+                      {REQUEST_PRIORITY_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  ) : isDepartmentField(field) ? (
+                    <select
+                      value={row[field.key] || (currentUser?.department_id || departments[0]?.id || '')}
+                      onChange={e => updateValue(rowIndex, field.key, e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: theme.borderRadius.sm,
+                        border: `1px solid ${theme.colors.gray.border}`
+                      }}
+                    >
+                      {departments.length === 0 && <option value="">No departments</option>}
+                      {departments.map(dep => (
+                        <option key={dep.id} value={dep.id}>{dep.name}</option>
+                      ))}
+                    </select>
                   ) : (
                     <input
                       type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
                       value={row[field.key] ?? ''}
                       onChange={e => updateValue(rowIndex, field.key, e.target.value)}
+                      list={
+                        isCompanyField(field)
+                          ? 'form-fill-registry-company-options'
+                          : isClientField(field)
+                            ? 'form-fill-registry-client-options'
+                            : undefined
+                      }
                       style={{
                         width: '100%',
                         padding: '8px 10px',

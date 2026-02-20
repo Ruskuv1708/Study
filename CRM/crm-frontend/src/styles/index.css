@@ -73,6 +73,7 @@ button {
   width: 100%;
   max-width: 1100px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .crm-page-header {
@@ -101,6 +102,7 @@ button {
 
 .crm-inline-grid-scroll {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
