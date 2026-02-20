@@ -44,6 +44,14 @@ const hasColumn = (columns: FormField[], name: string) => {
   })
 }
 
+const findDepartmentColumn = (columns: FormField[]) => {
+  return columns.find(field => {
+    const key = (field.key || '').toLowerCase()
+    const label = (field.label || '').toLowerCase()
+    return field.type === 'department_select' || key === 'department_id' || label === 'department'
+  })
+}
+
 function TemplateBuilderPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
@@ -72,6 +80,8 @@ function TemplateBuilderPage() {
   const selectedField = useMemo(() => columns[selectedColumn] || emptyField(), [columns, selectedColumn])
   const hasStatusColumn = useMemo(() => hasColumn(columns, 'status'), [columns])
   const hasPriorityColumn = useMemo(() => hasColumn(columns, 'priority'), [columns])
+  const departmentColumn = useMemo(() => findDepartmentColumn(columns), [columns])
+  const hasDepartmentColumn = Boolean(departmentColumn)
 
   useEffect(() => {
     if (selectedColumn >= columnCount) {
@@ -167,13 +177,34 @@ function TemplateBuilderPage() {
     }))
   }
 
-  const ensureColumn = (key: string, label: string) => {
-    if (hasColumn(columns, key)) return
+  const ensureColumn = (
+    key: string,
+    label: string,
+    options?: { type?: string; required?: boolean }
+  ) => {
+    const existingIndex = columns.findIndex(field => (field.key || '').toLowerCase() === key.toLowerCase())
+    if (existingIndex >= 0) {
+      setColumns(prev => prev.map((field, i) => {
+        if (i !== existingIndex) return field
+        return {
+          ...field,
+          label,
+          type: options?.type || field.type,
+          required: typeof options?.required === 'boolean' ? options.required : field.required,
+        }
+      }))
+      return
+    }
     if (columns.length >= MAX_COLUMNS) {
       alert(`Maximum ${MAX_COLUMNS} columns reached`)
       return
     }
-    const next = [...columns, { key, label, type: 'text', required: false }]
+    const next = [...columns, {
+      key,
+      label,
+      type: options?.type || 'text',
+      required: options?.required ?? false,
+    }]
     setColumns(next)
     setColumnCount(next.length)
     setSelectedColumn(next.length - 1)
@@ -206,10 +237,6 @@ function TemplateBuilderPage() {
       alert('Template name is required')
       return
     }
-    if (!requestDepartmentId) {
-      alert('Select a department for request routing')
-      return
-    }
     const structure = columns
       .map(field => ({ ...field, key: field.key.trim(), label: field.label.trim() }))
       .filter(field => field.key && field.label)
@@ -217,9 +244,17 @@ function TemplateBuilderPage() {
       alert('Define at least one column label')
       return
     }
+    const departmentField = structure.find(field =>
+      field.type === 'department_select' || field.key.toLowerCase() === 'department_id'
+    )
+    if (!departmentField && !requestDepartmentId) {
+      alert('Select a default department or add Department column')
+      return
+    }
     const request_settings = {
       enabled: true,
-      department_id: requestDepartmentId,
+      department_id: requestDepartmentId || null,
+      department_field_key: departmentField ? departmentField.key : null,
       priority: requestPriority,
       title_template: requestTitleTemplate.trim() || null,
       description_template: requestDescriptionTemplate.trim() || null
@@ -473,6 +508,20 @@ function TemplateBuilderPage() {
                 />
                 Include Priority column
               </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                <input
+                  type="checkbox"
+                  checked={hasDepartmentColumn}
+                  onChange={e => {
+                    if (e.target.checked) {
+                      ensureColumn('department_id', 'Department', { type: 'department_select', required: true })
+                    } else {
+                      removeColumnByKey('department_id')
+                    }
+                  }}
+                />
+                Include Department column
+              </label>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
               <div>
@@ -522,6 +571,7 @@ function TemplateBuilderPage() {
                   <option value="number">Number</option>
                   <option value="boolean">Yes/No</option>
                   <option value="date">Date</option>
+                  <option value="department_select">Department Select</option>
                 </select>
               </div>
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
@@ -546,7 +596,7 @@ function TemplateBuilderPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 600 }}>Department</label>
+                <label style={{ fontSize: '12px', fontWeight: 600 }}>Default Department</label>
                 <select
                   value={requestDepartmentId}
                   onChange={e => setRequestDepartmentId(e.target.value)}
@@ -614,6 +664,7 @@ function TemplateBuilderPage() {
               </div>
               <div style={{ fontSize: '11px', color: theme.colors.gray.text }}>
                 Placeholders like {`{amount}`} or {`{client_name}`} will be replaced with row values.
+                If Department column is included, its selected value is used for routing.
               </div>
             </div>
           </div>

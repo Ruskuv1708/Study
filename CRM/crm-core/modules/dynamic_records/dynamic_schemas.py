@@ -8,12 +8,13 @@ from modules.workflow.workflow_enums import RequestPriority
 class SchemaField(BaseModel):
     key: str
     label: str
-    type: str # text, number, boolean
+    type: str # text, number, boolean, department_select
     required: bool = False
 
 class RequestSettings(BaseModel):
     enabled: bool = False
     department_id: Optional[UUID] = None
+    department_field_key: Optional[str] = None
     priority: RequestPriority = RequestPriority.MEDIUM
     title_template: Optional[str] = None
     description_template: Optional[str] = None

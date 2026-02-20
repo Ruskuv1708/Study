@@ -15,6 +15,7 @@ export type FormTemplate = {
 export type RequestSettings = {
   enabled: boolean
   department_id?: string | null
+  department_field_key?: string | null
   priority?: string
   title_template?: string | null
   description_template?: string | null

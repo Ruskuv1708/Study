@@ -38,6 +38,10 @@ class DynamicRecordService:
                 if field_type == "boolean" and not isinstance(value, bool):
                     raise HTTPException(400, detail=f"Field '{field['label']}' must be true/false.")
 
+                if field_type == "department_select":
+                    if not isinstance(value, str) or not value.strip():
+                        raise HTTPException(400, detail=f"Field '{field['label']}' must be a department ID.")
+
         return True
 
     @staticmethod
@@ -76,12 +80,15 @@ class DynamicRecordService:
         if request_settings and request_settings.get("enabled"):
             PermissionService.require_permission(current_user, "create_request")
             department_id = request_settings.get("department_id")
+            department_field_key = request_settings.get("department_field_key")
+            if department_field_key and raw_data.get(department_field_key):
+                department_id = raw_data.get(department_field_key)
             if not department_id:
                 raise HTTPException(400, detail="Template request settings missing department_id")
             try:
                 department_uuid = department_id if hasattr(department_id, "hex") else uuid.UUID(str(department_id))
             except Exception:
-                raise HTTPException(400, detail="Invalid department_id in request settings")
+                raise HTTPException(400, detail="Invalid department_id in request settings or form data")
             dept = db.query(Department).filter(
                 Department.id == department_uuid,
                 Department.workspace_id == workspace_id

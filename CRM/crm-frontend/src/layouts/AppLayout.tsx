@@ -37,7 +37,6 @@ function AppLayout() {
       { label: 'Dashboard', path: '/dashboard' },
       { label: 'Requests', path: '/requests' },
       { label: 'Departments', path: '/departments' },
-      { label: 'Files', path: '/files' },
       { label: 'Reports', path: '/reports' },
     ]
     if (roleMatches(currentUser.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'MANAGER'])) {
