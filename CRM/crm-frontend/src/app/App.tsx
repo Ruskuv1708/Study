@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import Login from '../pages/Login'
 import Dashboard from '../pages/Dashboard'
 import Profile from '../pages/Profile'
 import RequestsPage from '../features/requests/RequestsPage'
+import AssignedRequestsPage from '../features/requests/AssignedRequestsPage'
 import DepartmentsPage from '../features/requests/DepartmentsPage'
 import RequestsHistoryPage from '../features/requests/RequestsHistoryPage'
 import TemplatesPage from '../features/forms/TemplatesPage'
@@ -27,6 +28,8 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/requests" element={<RequestsPage />} />
+          <Route path="/requests/assigned" element={<AssignedRequestsPage />} />
+          <Route path="/requests/my" element={<Navigate to="/requests/assigned" replace />} />
           <Route path="/requests/history" element={<RequestsHistoryPage />} />
           <Route path="/requests/:id" element={<RequestDetailsPage />} />
           <Route path="/departments" element={<DepartmentsPage />} />

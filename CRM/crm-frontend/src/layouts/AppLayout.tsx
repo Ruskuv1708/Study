@@ -1,41 +1,102 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import theme from '../shared/theme'
 import { normalizeRole, roleMatches } from '../shared/roleLabels'
+import { getWorkspaceParams } from '../shared/workspace'
+import type { RequestItem } from '../features/requests/types'
 
 const normalizeUserRole = (user: any) => ({
   ...user,
   role: normalizeRole(user.role)
 })
 
+type NotificationStats = {
+  assigned: number
+  pending: number
+  newCount: number
+}
+
 function AppLayout() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [notificationStats, setNotificationStats] = useState<NotificationStats>({
+    assigned: 0,
+    pending: 0,
+    newCount: 0,
+  })
+  const location = useLocation()
   const navigate = useNavigate()
 
-  useEffect(() => {
+  const loadNotificationStats = async (user: any) => {
     const token = localStorage.getItem('crm_token')
-    if (!token) {
-      navigate('/')
-      return
+    if (!token || !user?.id) return
+    setNotificationsLoading(true)
+    try {
+      const params = {
+        ...(getWorkspaceParams(user) || {}),
+        assignee_id: user.id,
+      }
+      const res = await axios.get('/workflow/requests', {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      })
+      const assignedRequests: RequestItem[] = Array.isArray(res.data) ? res.data : []
+      const ownAssigned = assignedRequests.filter(req => {
+        return typeof req?.assigned_to_id === 'string' && req.assigned_to_id.toLowerCase() === String(user.id).toLowerCase()
+      })
+      setNotificationStats({
+        assigned: ownAssigned.length,
+        newCount: ownAssigned.filter(req => req.status === 'new').length,
+        pending: ownAssigned.filter(req => req.status === 'pending').length,
+      })
+    } catch (err) {
+      console.warn('Failed to load request notifications', err)
+      setNotificationStats({ assigned: 0, newCount: 0, pending: 0 })
+    } finally {
+      setNotificationsLoading(false)
     }
+  }
 
-    axios.get('/access/me', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    .then(res => setCurrentUser(normalizeUserRole(res.data)))
-    .catch(() => {
-      localStorage.removeItem('crm_token')
-      navigate('/')
-    })
+  useEffect(() => {
+    ;(async () => {
+      const token = localStorage.getItem('crm_token')
+      if (!token) {
+        navigate('/')
+        return
+      }
+      try {
+        const res = await axios.get('/access/me', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        const normalized = normalizeUserRole(res.data)
+        setCurrentUser(normalized)
+        await loadNotificationStats(normalized)
+      } catch {
+        localStorage.removeItem('crm_token')
+        navigate('/')
+      }
+    })()
   }, [navigate])
+
+  useEffect(() => {
+    if (!currentUser) return
+    loadNotificationStats(currentUser)
+    const intervalId = window.setInterval(() => {
+      loadNotificationStats(currentUser)
+    }, 30000)
+    return () => window.clearInterval(intervalId)
+  }, [currentUser?.id, location.pathname])
 
   const menuItems = useMemo(() => {
     if (!currentUser) return []
     const base = [
       { label: 'Dashboard', path: '/dashboard' },
-      { label: 'Requests', path: '/requests' },
+      ...(roleMatches(currentUser.role, ['USER', 'VIEWER'])
+        ? [{ label: 'Assigned Requests', path: '/requests/assigned' }]
+        : [{ label: 'Requests', path: '/requests' }, { label: 'Assigned Requests', path: '/requests/assigned' }]
+      ),
       { label: 'Departments', path: '/departments' },
       { label: 'Reports', path: '/reports' },
     ]
@@ -136,19 +197,39 @@ function AppLayout() {
           <div>
             <strong style={{ fontSize: '16px' }}>{currentUser.full_name}</strong>
             <div style={{ fontSize: '12px', color: '#555' }}>{currentUser.role?.toUpperCase()}</div>
+            <div style={{ fontSize: '11px', color: '#777' }}>
+              Assigned: <strong>{notificationsLoading ? '...' : notificationStats.assigned}</strong>
+              {' '}• New: <strong>{notificationsLoading ? '...' : notificationStats.newCount}</strong>
+              {' '}• Pending: <strong>{notificationsLoading ? '...' : notificationStats.pending}</strong>
+            </div>
           </div>
-          <button
-            onClick={() => navigate('/profile')}
-            style={{
-              background: '#f0f1f6',
-              border: '1px solid #ccd0db',
-              borderRadius: '20px',
-              padding: '6px 14px',
-              cursor: 'pointer'
-            }}
-          >
-            Profile
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => navigate('/requests/assigned')}
+              style={{
+                background: '#fffbe6',
+                border: '1px solid #ffe58f',
+                borderRadius: '20px',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+            >
+              Assigned Requests: {notificationsLoading ? '...' : notificationStats.assigned}
+            </button>
+            <button
+              onClick={() => navigate('/profile')}
+              style={{
+                background: '#f0f1f6',
+                border: '1px solid #ccd0db',
+                borderRadius: '20px',
+                padding: '6px 14px',
+                cursor: 'pointer'
+              }}
+            >
+              Profile
+            </button>
+          </div>
         </header>
         <main style={{ padding: theme.spacing.lg }}>
           <Outlet />
