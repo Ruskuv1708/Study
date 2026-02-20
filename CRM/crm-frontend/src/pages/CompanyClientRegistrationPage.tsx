@@ -28,13 +28,70 @@ type ClientItem = {
   notes?: string | null
   company_id?: string | null
   company_name?: string | null
+  status?: string
+  status_company_id?: string | null
+  status_company_name?: string | null
+  status_label?: string | null
   created_at?: string | null
 }
+
+type ClientObjectItem = {
+  id: string
+  name: string
+  client_id?: string | null
+  client_name?: string | null
+  company_id?: string | null
+  company_name?: string | null
+  assignment_type?: string
+  assignment_name?: string | null
+  attributes: Record<string, string>
+  created_at?: string | null
+}
+
+type ObjectAttributeInput = {
+  key: string
+  value: string
+}
+
+type ObjectAssignmentTarget = 'none' | 'client' | 'company'
+
+type ObjectFormState = {
+  name: string
+  assignment_target: ObjectAssignmentTarget
+  client_id: string
+  company_id: string
+  attributes: ObjectAttributeInput[]
+}
+
+const CLIENT_STATUS_OPTIONS = [
+  { value: 'new', label: 'New' },
+  { value: 'active', label: 'Active' },
+  { value: 'reactivated', label: 'Reactivated' },
+  { value: 'deactivated', label: 'Deactivated' },
+  { value: 'changed_from', label: 'Changed from company' },
+  { value: 'changed_to', label: 'Changed to company' },
+]
 
 const normalizeUser = (user: any) => ({
   ...user,
   role: normalizeRole(user.role),
 })
+
+const buildEmptyObjectForm = (): ObjectFormState => ({
+  name: '',
+  assignment_target: 'none',
+  client_id: '',
+  company_id: '',
+  attributes: [{ key: '', value: '' }],
+})
+
+const getClientDisplayName = (client: ClientItem) => `${client.first_name} ${client.last_name}`.trim()
+
+const getObjectAssignmentTarget = (clientObject: ClientObjectItem): ObjectAssignmentTarget => {
+  if (clientObject.client_id) return 'client'
+  if (clientObject.company_id) return 'company'
+  return 'none'
+}
 
 function CompanyClientRegistrationPage() {
   const navigate = useNavigate()
@@ -43,6 +100,7 @@ function CompanyClientRegistrationPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [companies, setCompanies] = useState<CompanyItem[]>([])
   const [clients, setClients] = useState<ClientItem[]>([])
+  const [clientObjects, setClientObjects] = useState<ClientObjectItem[]>([])
 
   const [companyForm, setCompanyForm] = useState({
     name: '',
@@ -58,13 +116,19 @@ function CompanyClientRegistrationPage() {
     phone: '',
     company_id: '',
     notes: '',
+    status: 'new',
+    status_company_id: '',
   })
+  const [objectForm, setObjectForm] = useState<ObjectFormState>(buildEmptyObjectForm)
 
   const [loading, setLoading] = useState(true)
   const [savingCompany, setSavingCompany] = useState(false)
   const [savingClient, setSavingClient] = useState(false)
+  const [savingObject, setSavingObject] = useState(false)
+  const [assigningObjectId, setAssigningObjectId] = useState<string | null>(null)
   const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null)
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null)
+  const [deletingObjectId, setDeletingObjectId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const canCreate = useMemo(() => {
@@ -76,6 +140,21 @@ function CompanyClientRegistrationPage() {
     if (!currentUser) return false
     return roleMatches(currentUser.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN'])
   }, [currentUser])
+
+  const canManageObjects = useMemo(() => {
+    if (!currentUser) return false
+    return roleMatches(currentUser.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'MANAGER', 'USER'])
+  }, [currentUser])
+
+  const requiresStatusCompany = useMemo(() => {
+    return clientForm.status === 'changed_from' || clientForm.status === 'changed_to'
+  }, [clientForm.status])
+
+  const statusCompanyLabel = useMemo(() => {
+    if (clientForm.status === 'changed_from') return 'Changed from company'
+    if (clientForm.status === 'changed_to') return 'Changed to company'
+    return 'Status company'
+  }, [clientForm.status])
 
   const fetchCurrentUser = async () => {
     const token = localStorage.getItem('crm_token')
@@ -95,7 +174,7 @@ function CompanyClientRegistrationPage() {
     const token = localStorage.getItem('crm_token')
     if (!token) return
     const params = getWorkspaceParams(user)
-    const [companyRes, clientRes] = await Promise.all([
+    const [companyRes, clientRes, objectRes] = await Promise.all([
       axios.get('/registry/companies', {
         headers: { Authorization: `Bearer ${token}` },
         params,
@@ -104,9 +183,14 @@ function CompanyClientRegistrationPage() {
         headers: { Authorization: `Bearer ${token}` },
         params,
       }),
+      axios.get('/registry/objects', {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      }),
     ])
     setCompanies(Array.isArray(companyRes.data) ? companyRes.data : [])
     setClients(Array.isArray(clientRes.data) ? clientRes.data : [])
+    setClientObjects(Array.isArray(objectRes.data) ? objectRes.data : [])
   }
 
   useEffect(() => {
@@ -163,6 +247,8 @@ function CompanyClientRegistrationPage() {
         {
           ...clientForm,
           company_id: clientForm.company_id || null,
+          status: clientForm.status || 'new',
+          status_company_id: requiresStatusCompany ? clientForm.status_company_id || null : null,
         },
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -176,12 +262,150 @@ function CompanyClientRegistrationPage() {
         phone: '',
         company_id: '',
         notes: '',
+        status: 'new',
+        status_company_id: '',
       })
       await fetchRegistryData(currentUser)
     } catch (err: any) {
       setError(err?.response?.data?.detail || 'Failed to register client')
     } finally {
       setSavingClient(false)
+    }
+  }
+
+  const formatClientStatus = (client: ClientItem) => {
+    if (client.status_label) return client.status_label
+    const status = (client.status || 'new').toLowerCase()
+    if (status === 'changed_from') {
+      return client.status_company_name ? `Changed from ${client.status_company_name}` : 'Changed from company'
+    }
+    if (status === 'changed_to') {
+      return client.status_company_name ? `Changed to ${client.status_company_name}` : 'Changed to company'
+    }
+    const plainLabel = CLIENT_STATUS_OPTIONS.find(option => option.value === status)?.label
+    return plainLabel || 'New'
+  }
+
+  const buildObjectAttributes = () => {
+    const next: Record<string, string> = {}
+    objectForm.attributes.forEach(item => {
+      const key = item.key.trim()
+      if (!key) return
+      next[key] = item.value.trim()
+    })
+    return next
+  }
+
+  const formatObjectAttributes = (attributes: Record<string, string>) => {
+    const entries = Object.entries(attributes || {})
+    if (entries.length === 0) return '—'
+    return entries.map(([key, value]) => `${key}: ${value || '—'}`).join(' | ')
+  }
+
+  const handleObjectAttributeChange = (index: number, field: 'key' | 'value', value: string) => {
+    setObjectForm(prev => {
+      const nextAttributes = [...prev.attributes]
+      if (!nextAttributes[index]) return prev
+      nextAttributes[index] = { ...nextAttributes[index], [field]: value }
+      return { ...prev, attributes: nextAttributes }
+    })
+  }
+
+  const handleAddObjectAttribute = () => {
+    setObjectForm(prev => ({
+      ...prev,
+      attributes: [...prev.attributes, { key: '', value: '' }],
+    }))
+  }
+
+  const handleRemoveObjectAttribute = (index: number) => {
+    setObjectForm(prev => {
+      if (prev.attributes.length <= 1) {
+        return { ...prev, attributes: [{ key: '', value: '' }] }
+      }
+      return {
+        ...prev,
+        attributes: prev.attributes.filter((_, itemIndex) => itemIndex !== index),
+      }
+    })
+  }
+
+  const handleCreateObject = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!currentUser) return
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    setSavingObject(true)
+    setError(null)
+    try {
+      await axios.post(
+        '/registry/objects',
+        {
+          name: objectForm.name.trim(),
+          client_id: objectForm.assignment_target === 'client' ? objectForm.client_id || null : null,
+          company_id: objectForm.assignment_target === 'company' ? objectForm.company_id || null : null,
+          attributes: buildObjectAttributes(),
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: getWorkspaceParams(currentUser),
+        },
+      )
+      setObjectForm(buildEmptyObjectForm())
+      await fetchRegistryData(currentUser)
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Failed to create object')
+    } finally {
+      setSavingObject(false)
+    }
+  }
+
+  const handleAssignObject = async (
+    objectId: string,
+    assignment: { client_id?: string | null; company_id?: string | null },
+  ) => {
+    if (!currentUser) return
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    setAssigningObjectId(objectId)
+    setError(null)
+    try {
+      await axios.put(
+        `/registry/objects/${objectId}`,
+        {
+          client_id: assignment.client_id || null,
+          company_id: assignment.company_id || null,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: getWorkspaceParams(currentUser),
+        },
+      )
+      await fetchRegistryData(currentUser)
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Failed to update object assignment')
+    } finally {
+      setAssigningObjectId(null)
+    }
+  }
+
+  const handleDeleteObject = async (objectId: string) => {
+    if (!currentUser) return
+    if (!window.confirm('Delete this object?')) return
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    setDeletingObjectId(objectId)
+    setError(null)
+    try {
+      await axios.delete(`/registry/objects/${objectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: getWorkspaceParams(currentUser),
+      })
+      await fetchRegistryData(currentUser)
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Failed to delete object')
+    } finally {
+      setDeletingObjectId(null)
     }
   }
 
@@ -378,6 +602,42 @@ function CompanyClientRegistrationPage() {
                 </option>
               ))}
             </select>
+            <select
+              value={clientForm.status}
+              onChange={event => {
+                const nextStatus = event.target.value
+                setClientForm(prev => ({
+                  ...prev,
+                  status: nextStatus,
+                  status_company_id:
+                    nextStatus === 'changed_from' || nextStatus === 'changed_to'
+                      ? prev.status_company_id
+                      : '',
+                }))
+              }}
+              style={{ width: '100%', padding: '8px' }}
+            >
+              {CLIENT_STATUS_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {requiresStatusCompany && (
+              <select
+                required
+                value={clientForm.status_company_id}
+                onChange={event => setClientForm(prev => ({ ...prev, status_company_id: event.target.value }))}
+                style={{ width: '100%', padding: '8px' }}
+              >
+                <option value="">{statusCompanyLabel}</option>
+                {companies.map(company => (
+                  <option key={company.id} value={company.id}>
+                    {company.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               type="email"
               placeholder="Client email"
@@ -415,6 +675,312 @@ function CompanyClientRegistrationPage() {
           </form>
         </div>
       )}
+
+      <div
+        style={{
+          background: '#fff',
+          borderRadius: theme.borderRadius.lg,
+          boxShadow: theme.shadows.sm,
+          padding: theme.spacing.md,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: theme.spacing.md,
+          minWidth: 0,
+        }}
+      >
+        <div className="crm-page-header">
+          <div>
+            <h3 style={{ margin: 0 }}>Client Objects ({clientObjects.length})</h3>
+            <div style={{ color: theme.colors.gray.text, fontSize: '12px' }}>
+              Create custom objects with attributes and assign them to a client or company.
+            </div>
+          </div>
+        </div>
+
+        {canManageObjects && (
+          <form
+            onSubmit={handleCreateObject}
+            style={{
+              border: `1px solid ${theme.colors.gray.border}`,
+              borderRadius: theme.borderRadius.md,
+              padding: theme.spacing.md,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: theme.spacing.sm,
+            }}
+          >
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 1fr',
+                gap: theme.spacing.sm,
+              }}
+            >
+              <input
+                required
+                placeholder="Object name"
+                value={objectForm.name}
+                onChange={event => setObjectForm(prev => ({ ...prev, name: event.target.value }))}
+                style={{ width: '100%', padding: '8px' }}
+              />
+              <select
+                value={objectForm.assignment_target}
+                onChange={event => {
+                  const nextTarget = event.target.value as ObjectAssignmentTarget
+                  setObjectForm(prev => ({
+                    ...prev,
+                    assignment_target: nextTarget,
+                    client_id: nextTarget === 'client' ? prev.client_id : '',
+                    company_id: nextTarget === 'company' ? prev.company_id : '',
+                  }))
+                }}
+                style={{ width: '100%', padding: '8px' }}
+              >
+                <option value="none">Unassigned</option>
+                <option value="client">Assign to client</option>
+                <option value="company">Assign to company</option>
+              </select>
+              {objectForm.assignment_target === 'client' ? (
+                <select
+                  required
+                  value={objectForm.client_id}
+                  onChange={event => setObjectForm(prev => ({ ...prev, client_id: event.target.value, company_id: '' }))}
+                  style={{ width: '100%', padding: '8px' }}
+                >
+                  <option value="">Choose client</option>
+                  {clients.map(client => (
+                    <option key={client.id} value={client.id}>
+                      {getClientDisplayName(client)}
+                    </option>
+                  ))}
+                </select>
+              ) : objectForm.assignment_target === 'company' ? (
+                <select
+                  required
+                  value={objectForm.company_id}
+                  onChange={event => setObjectForm(prev => ({ ...prev, company_id: event.target.value, client_id: '' }))}
+                  style={{ width: '100%', padding: '8px' }}
+                >
+                  <option value="">Choose company</option>
+                  {companies.map(company => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div
+                  style={{
+                    border: `1px solid ${theme.colors.gray.border}`,
+                    borderRadius: theme.borderRadius.sm,
+                    padding: '8px',
+                    color: theme.colors.gray.text,
+                    fontSize: '13px',
+                  }}
+                >
+                  No assignment
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: theme.spacing.xs,
+              }}
+            >
+              <div style={{ fontSize: '12px', color: theme.colors.gray.text }}>Custom attributes</div>
+              {objectForm.attributes.map((attribute, index) => (
+                <div
+                  key={`attribute-${index}`}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr auto',
+                    gap: theme.spacing.xs,
+                  }}
+                >
+                  <input
+                    placeholder="Attribute key"
+                    value={attribute.key}
+                    onChange={event => handleObjectAttributeChange(index, 'key', event.target.value)}
+                    style={{ width: '100%', padding: '8px' }}
+                  />
+                  <input
+                    placeholder="Attribute value"
+                    value={attribute.value}
+                    onChange={event => handleObjectAttributeChange(index, 'value', event.target.value)}
+                    style={{ width: '100%', padding: '8px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveObjectAttribute(index)}
+                    style={{
+                      border: `1px solid ${theme.colors.gray.border}`,
+                      background: '#fff',
+                      borderRadius: theme.borderRadius.sm,
+                      padding: '8px 10px',
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: theme.spacing.xs, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleAddObjectAttribute}
+                style={{
+                  border: `1px solid ${theme.colors.gray.border}`,
+                  background: '#fff',
+                  borderRadius: theme.borderRadius.sm,
+                  padding: '8px 10px',
+                }}
+              >
+                Add attribute
+              </button>
+              <button
+                type="submit"
+                disabled={savingObject}
+                style={{
+                  border: 'none',
+                  background: theme.colors.primary,
+                  color: '#fff',
+                  borderRadius: theme.borderRadius.sm,
+                  padding: '8px 12px',
+                  cursor: savingObject ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {savingObject ? 'Saving...' : 'Create object'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {clientObjects.length === 0 ? (
+          <div style={{ color: theme.colors.gray.text }}>No objects created yet.</div>
+        ) : (
+          <div className="crm-table-scroll">
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={tableHeader}>Name</th>
+                  <th style={tableHeader}>Assignment</th>
+                  <th style={tableHeader}>Attributes</th>
+                  <th style={tableHeader}>Created</th>
+                  {canDelete && <th style={tableHeader}>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {clientObjects.map(clientObject => (
+                  <tr key={clientObject.id}>
+                    <td style={tableCell}>{clientObject.name}</td>
+                    <td style={tableCell}>
+                      {canManageObjects ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: theme.spacing.xs }}>
+                          <select
+                            value={getObjectAssignmentTarget(clientObject)}
+                            onChange={event => {
+                              const nextTarget = event.target.value as ObjectAssignmentTarget
+                              if (nextTarget === 'none') {
+                                handleAssignObject(clientObject.id, { client_id: null, company_id: null })
+                                return
+                              }
+                              if (nextTarget === 'client') {
+                                handleAssignObject(clientObject.id, {
+                                  client_id: clientObject.client_id || null,
+                                  company_id: null,
+                                })
+                                return
+                              }
+                              handleAssignObject(clientObject.id, {
+                                client_id: null,
+                                company_id: clientObject.company_id || null,
+                              })
+                            }}
+                            disabled={assigningObjectId === clientObject.id}
+                            style={{ width: '100%', padding: '6px' }}
+                          >
+                            <option value="none">Unassigned</option>
+                            <option value="client">Client</option>
+                            <option value="company">Company</option>
+                          </select>
+
+                          {getObjectAssignmentTarget(clientObject) === 'client' ? (
+                            <select
+                              value={clientObject.client_id || ''}
+                              onChange={event =>
+                                handleAssignObject(clientObject.id, {
+                                  client_id: event.target.value || null,
+                                  company_id: null,
+                                })
+                              }
+                              disabled={assigningObjectId === clientObject.id}
+                              style={{ width: '100%', padding: '6px' }}
+                            >
+                              <option value="">Choose client</option>
+                              {clients.map(client => (
+                                <option key={client.id} value={client.id}>
+                                  {getClientDisplayName(client)}
+                                </option>
+                              ))}
+                            </select>
+                          ) : getObjectAssignmentTarget(clientObject) === 'company' ? (
+                            <select
+                              value={clientObject.company_id || ''}
+                              onChange={event =>
+                                handleAssignObject(clientObject.id, {
+                                  client_id: null,
+                                  company_id: event.target.value || null,
+                                })
+                              }
+                              disabled={assigningObjectId === clientObject.id}
+                              style={{ width: '100%', padding: '6px' }}
+                            >
+                              <option value="">Choose company</option>
+                              {companies.map(company => (
+                                <option key={company.id} value={company.id}>
+                                  {company.name}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
+                        </div>
+                      ) : (
+                        clientObject.assignment_name || clientObject.client_name || clientObject.company_name || 'Unassigned'
+                      )}
+                    </td>
+                    <td style={tableCell}>{formatObjectAttributes(clientObject.attributes)}</td>
+                    <td style={tableCell}>
+                      {clientObject.created_at ? new Date(clientObject.created_at).toLocaleString() : '—'}
+                    </td>
+                    {canDelete && (
+                      <td style={tableCell}>
+                        <button
+                          onClick={() => handleDeleteObject(clientObject.id)}
+                          disabled={deletingObjectId === clientObject.id}
+                          style={{
+                            border: '1px solid #ffa39e',
+                            background: '#fff1f0',
+                            color: '#cf1322',
+                            borderRadius: theme.borderRadius.sm,
+                            padding: '6px 10px',
+                            cursor: deletingObjectId === clientObject.id ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          {deletingObjectId === clientObject.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div
         style={{
@@ -499,6 +1065,7 @@ function CompanyClientRegistrationPage() {
                   <tr>
                     <th style={tableHeader}>Name</th>
                     <th style={tableHeader}>Company</th>
+                    <th style={tableHeader}>Status</th>
                     <th style={tableHeader}>Contact</th>
                     <th style={tableHeader}>Notes</th>
                     {canDelete && <th style={tableHeader}>Actions</th>}
@@ -509,6 +1076,7 @@ function CompanyClientRegistrationPage() {
                     <tr key={client.id}>
                       <td style={tableCell}>{client.first_name} {client.last_name}</td>
                       <td style={tableCell}>{client.company_name || '—'}</td>
+                      <td style={tableCell}>{formatClientStatus(client)}</td>
                       <td style={tableCell}>{client.email || client.phone || '—'}</td>
                       <td style={tableCell}>{client.notes || '—'}</td>
                       {canDelete && (

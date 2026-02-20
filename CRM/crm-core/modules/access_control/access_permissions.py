@@ -53,6 +53,10 @@ class PermissionService:
             "edit_client",
             "delete_client",
             "view_clients",
+            "create_client_object",
+            "edit_client_object",
+            "delete_client_object",
+            "view_client_objects",
         ],
         UserRole.SYSTEM_ADMIN: [
             "create_user",
@@ -92,6 +96,10 @@ class PermissionService:
             "edit_client",
             "delete_client",
             "view_clients",
+            "create_client_object",
+            "edit_client_object",
+            "delete_client_object",
+            "view_client_objects",
         ],
         UserRole.ADMIN: [
             "create_user",
@@ -131,6 +139,10 @@ class PermissionService:
             "edit_client",
             "delete_client",
             "view_clients",
+            "create_client_object",
+            "edit_client_object",
+            "delete_client_object",
+            "view_client_objects",
         ],
         UserRole.MANAGER: [
             "create_request",
@@ -157,6 +169,9 @@ class PermissionService:
             "create_client",
             "edit_client",
             "view_clients",
+            "create_client_object",
+            "edit_client_object",
+            "view_client_objects",
         ],
         UserRole.USER: [
         "create_request",
@@ -177,6 +192,9 @@ class PermissionService:
         "create_client",
         "edit_client",
         "view_clients",
+        "create_client_object",
+        "edit_client_object",
+        "view_client_objects",
         ],
         UserRole.VIEWER: [
             "view_own_requests",
@@ -185,6 +203,7 @@ class PermissionService:
             "download_files",
             "view_companies",
             "view_clients",
+            "view_client_objects",
         ],
     }
 

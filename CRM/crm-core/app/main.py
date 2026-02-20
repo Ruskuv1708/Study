@@ -32,7 +32,7 @@ from modules.dynamic_records.dynamic_models import FormTemplate, FormRecord
 from modules.workflow.workflow_models import Department, Request
 from modules.notifications.notif_models import Notification
 from modules.file_storage.file_models import FileAttachment
-from modules.registry.registry_models import Company, Client
+from modules.registry.registry_models import Company, Client, ClientObject
 
 # --- LIFESPAN MANAGER (Startup/Shutdown) ---
 @asynccontextmanager
