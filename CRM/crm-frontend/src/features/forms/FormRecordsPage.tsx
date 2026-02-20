@@ -6,17 +6,30 @@ import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import type { FormTemplate, FormRecord } from './types'
 import useIsMobile from '../../shared/useIsMobile'
+import { isDepartmentField } from '../../shared/useRegistryAutocomplete'
 
 const normalizeUser = (user: any) => ({
   ...user,
   role: normalizeRole(user.role)
 })
 
+interface Department {
+  id: string
+  name: string
+}
+
+const normalizeId = (value?: string | null): string | null => value ? value.toLowerCase() : null
+const areIdsEqual = (a?: string | null, b?: string | null) => {
+  if (!a || !b) return false
+  return normalizeId(a) === normalizeId(b)
+}
+
 function FormRecordsPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const [template, setTemplate] = useState<FormTemplate | null>(null)
   const [records, setRecords] = useState<FormRecord[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
@@ -67,6 +80,15 @@ function FormRecordsPage() {
     setRecords(res.data)
   }
 
+  const fetchDepartments = async (user?: any) => {
+    if (!token) return
+    const res = await axios.get('/workflow/departments', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: getWorkspaceParams(user || currentUser)
+    })
+    setDepartments(res.data || [])
+  }
+
   const handleDelete = async (recordId: string) => {
     if (!token) return
     if (!window.confirm('Delete this submission? This will also delete its request.')) return
@@ -109,6 +131,7 @@ function FormRecordsPage() {
       try {
         const user = await fetchCurrentUser()
         await fetchTemplate(user)
+        await fetchDepartments(user)
         await fetchRecords(user)
       } catch (err: any) {
         console.error(err)
@@ -124,6 +147,12 @@ function FormRecordsPage() {
     if (!template) return []
     return template.schema_structure || []
   }, [template])
+
+  const getDepartmentName = (departmentId?: string | null) => {
+    if (!departmentId) return ''
+    const match = departments.find(dep => areIdsEqual(dep.id, departmentId))
+    return match?.name || departmentId
+  }
 
   if (loading) {
     return <div style={{ padding: theme.spacing.lg }}>Loading...</div>
@@ -231,7 +260,9 @@ function FormRecordsPage() {
             </div>
             {columns.map(col => (
               <div key={`${record.id}-${col.key}`} style={{ fontSize: '13px' }}>
-                {String(record.entry_data?.[col.key] ?? '')}
+                {isDepartmentField(col)
+                  ? getDepartmentName(String(record.entry_data?.[col.key] ?? ''))
+                  : String(record.entry_data?.[col.key] ?? '')}
               </div>
             ))}
             {canDelete && (

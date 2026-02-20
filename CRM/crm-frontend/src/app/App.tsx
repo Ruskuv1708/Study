@@ -17,6 +17,7 @@ import RequestDetailsPage from '../features/requests/RequestDetailsPage'
 import AppLayout from '../layouts/AppLayout'
 import FilesPage from '../pages/FilesPage'
 import ReportsPage from '../pages/ReportsPage'
+import CompanyClientRegistrationPage from '../pages/CompanyClientRegistrationPage'
 
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
           <Route path="/requests/history" element={<RequestsHistoryPage />} />
           <Route path="/requests/:id" element={<RequestDetailsPage />} />
           <Route path="/departments" element={<DepartmentsPage />} />
+          <Route path="/registry" element={<CompanyClientRegistrationPage />} />
           <Route path="/forms" element={<TemplatesPage />} />
           <Route path="/forms/new" element={<TemplateBuilderPage />} />
           <Route path="/forms/:id/edit" element={<TemplateBuilderPage />} />

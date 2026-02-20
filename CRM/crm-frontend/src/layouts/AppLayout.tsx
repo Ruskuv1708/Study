@@ -109,6 +109,10 @@ function AppLayout() {
         : [{ label: 'Requests', path: '/requests' }, { label: 'Assigned Requests', path: '/requests/assigned' }]
       ),
       { label: 'Departments', path: '/departments' },
+      ...(roleMatches(currentUser.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'MANAGER', 'USER'])
+        ? [{ label: 'Registry', path: '/registry' }]
+        : []
+      ),
       { label: 'Reports', path: '/reports' },
     ]
     if (roleMatches(currentUser.role, ['SUPERADMIN', 'SYSTEM_ADMIN', 'ADMIN', 'MANAGER'])) {
@@ -128,7 +132,6 @@ function AppLayout() {
   }
 
   const sidebarWidth = sidebarOpen ? 260 : 84
-  const desktopSidebarWidth = isMobile ? 0 : sidebarWidth
   const compactSidebar = !isMobile && !sidebarOpen
   const handleLogout = () => {
     localStorage.removeItem('crm_token')
@@ -243,8 +246,6 @@ function AppLayout() {
       <div style={{
         flex: 1,
         backgroundColor: theme.colors.gray.lighter,
-        marginLeft: desktopSidebarWidth,
-        transition: 'margin-left 0.3s ease',
         minWidth: 0,
       }}>
         <header style={{

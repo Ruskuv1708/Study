@@ -8,8 +8,13 @@ import { roleMatches } from '../../shared/roleLabels';
 import { getWorkspaceParams } from '../../shared/workspace';
 import type { FormTemplate, FormRecord } from '../forms/types';
 import useIsMobile from '../../shared/useIsMobile';
+import { isDepartmentField } from '../../shared/useRegistryAutocomplete';
 
 interface Props {}
+interface Department {
+  id: string
+  name: string
+}
 
 const normalizeId = (value?: string | null): string | null => value ? value.toLowerCase() : null
 const areIdsEqual = (a?: string | null, b?: string | null) => {
@@ -27,6 +32,7 @@ function RequestDetailsPage(_props: Props) {
   const [unassigning, setUnassigning] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [departmentUsers, setDepartmentUsers] = useState<any[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [assignedDisplayName, setAssignedDisplayName] = useState<string | null>(null)
   const isMobile = useIsMobile()
 
@@ -63,9 +69,25 @@ function RequestDetailsPage(_props: Props) {
     }
   }
 
+  const fetchDepartments = async (user?: any) => {
+    const token = localStorage.getItem('crm_token')
+    if (!token) return
+    try {
+      const res = await axios.get('/workflow/departments', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: getWorkspaceParams(user || currentUser)
+      })
+      setDepartments(res.data || [])
+    } catch (err) {
+      console.warn('Unable to load departments', err)
+      setDepartments([])
+    }
+  }
+
   useEffect(() => {
     ;(async () => {
       const user = await loadCurrentUser()
+      await fetchDepartments(user)
       await loadRequestDetails(user)
     })()
   }, [])
@@ -232,6 +254,12 @@ function RequestDetailsPage(_props: Props) {
 
   if (!request) return <div>Request not found!</div>;
 
+  const getDepartmentName = (departmentId?: string | null) => {
+    if (!departmentId) return ''
+    const match = departments.find(dep => areIdsEqual(dep.id, departmentId))
+    return match?.name || departmentId
+  }
+
   const assignedName = assignedDisplayName || request.assignee?.full_name || departmentUsers.find(u => u.id === request.assigned_to_id)?.full_name || 'Unknown'
   const showStatus = template ? template.schema_structure?.some(f => ['status'].includes(f.key?.toLowerCase() || '') || ['status'].includes(f.label?.toLowerCase() || '')) : true
   const showPriority = template ? template.schema_structure?.some(f => ['priority'].includes(f.key?.toLowerCase() || '') || ['priority'].includes(f.label?.toLowerCase() || '')) : true
@@ -250,7 +278,7 @@ function RequestDetailsPage(_props: Props) {
         <p style={{ fontSize: '14px', color: 'gray' }}>
           {showStatus && (<><b>Status:</b> {request.status}<br/></>)}
           {showPriority && (<><b>Priority:</b> {request.priority}<br/></>)}
-          <b>Department:</b> {request.department_id || 'N/A'}
+          <b>Department:</b> {getDepartmentName(request.department_id) || 'N/A'}
         </p>
         {canChangeStatus && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -317,7 +345,11 @@ function RequestDetailsPage(_props: Props) {
                 background: '#fff'
               }}>
                 <div style={{ fontWeight: 600, color: '#555' }}>{field.label}</div>
-                <div>{String(record.entry_data?.[field.key] ?? '')}</div>
+                <div>
+                  {isDepartmentField(field)
+                    ? getDepartmentName(String(record.entry_data?.[field.key] ?? ''))
+                    : String(record.entry_data?.[field.key] ?? '')}
+                </div>
               </div>
             ))}
           </div>

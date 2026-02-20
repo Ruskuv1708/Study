@@ -23,6 +23,7 @@ from modules.notifications.notif_router import router as notif_router
 from modules.file_storage.file_router import router as file_router
 from modules.reports.report_router import router as report_router
 from modules.workspace_management.workspace_router import router as workspace_router
+from modules.registry.registry_router import router as registry_router
 
 # --- IMPORTS: MODELS (For Table Creation) ---
 from modules.access_control.access_models import User
@@ -31,6 +32,7 @@ from modules.dynamic_records.dynamic_models import FormTemplate, FormRecord
 from modules.workflow.workflow_models import Department, Request
 from modules.notifications.notif_models import Notification
 from modules.file_storage.file_models import FileAttachment
+from modules.registry.registry_models import Company, Client
 
 # --- LIFESPAN MANAGER (Startup/Shutdown) ---
 @asynccontextmanager
@@ -101,6 +103,7 @@ crm_core_app.include_router(workflow_router)
 crm_core_app.include_router(notif_router)
 crm_core_app.include_router(file_router)
 crm_core_app.include_router(report_router)
+crm_core_app.include_router(registry_router)
 
 # --- HEALTH CHECK ---
 @crm_core_app.get("/")

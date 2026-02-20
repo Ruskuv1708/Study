@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from uuid import UUID
+from uuid import uuid4
 from passlib.context import CryptContext
 
 from core.database_connector import get_db
@@ -13,6 +14,7 @@ from modules.access_control.access_models import User, Workspace
 from modules.access_control.access_enums import UserRole
 from modules.access_control.access_permissions import PermissionService
 from modules.access_control.access_service import AccessService
+from modules.workflow.workflow_models import Department
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -42,12 +44,87 @@ class UserResponseSchema(BaseModel):
     is_active: bool
     workspace_id: Optional[UUID] = None
     department_id: Optional[UUID] = None
+    rank_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 class RoleUpdateSchema(BaseModel):
     new_role: str
     department_id: Optional[UUID] = None
+
+class DepartmentRankCreateSchema(BaseModel):
+    name: str
+
+class UserRankAssignSchema(BaseModel):
+    department_id: UUID
+    rank_id: Optional[str] = None
+
+
+def _read_rank_id(user: User) -> Optional[str]:
+    meta = user.meta_data if isinstance(user.meta_data, dict) else {}
+    rank_id = meta.get("department_rank_id")
+    if rank_id is None:
+        return None
+    return str(rank_id)
+
+
+def _serialize_user(user: User) -> dict:
+    return {
+        "id": user.id,
+        "full_name": user.full_name,
+        "email": user.email,
+        "role": user.role,
+        "is_active": user.is_active,
+        "workspace_id": user.workspace_id,
+        "department_id": user.department_id,
+        "rank_id": _read_rank_id(user),
+    }
+
+
+def _extract_department_ranks(department: Department) -> list[dict]:
+    meta = department.meta_data if isinstance(department.meta_data, dict) else {}
+    raw_ranks = meta.get("ranks")
+    if not isinstance(raw_ranks, list):
+        return []
+
+    normalized: list[dict] = []
+    seen_ids: set[str] = set()
+    for item in raw_ranks:
+        if not isinstance(item, dict):
+            continue
+        rank_id = str(item.get("id") or "").strip()
+        rank_name = str(item.get("name") or "").strip()
+        if not rank_id or not rank_name or rank_id in seen_ids:
+            continue
+        seen_ids.add(rank_id)
+        try:
+            order = int(item.get("order"))
+        except (TypeError, ValueError):
+            order = len(normalized) + 1
+        normalized.append({
+            "id": rank_id,
+            "name": rank_name,
+            "order": order,
+        })
+
+    normalized.sort(key=lambda rank: (rank.get("order", 999999), rank.get("name", "").lower()))
+    return normalized
+
+
+def _can_manage_department(current_user, department_id: UUID) -> bool:
+    if current_user.role != UserRole.MANAGER:
+        return True
+    return current_user.department_id == department_id
+
+
+def _resolve_department_for_user(current_user, db: Session, department_id: UUID) -> Department:
+    query = db.query(Department).filter(Department.id == department_id)
+    if current_user.role not in (UserRole.SUPERADMIN, UserRole.SYSTEM_ADMIN):
+        query = query.filter(Department.workspace_id == current_user.workspace_id)
+    department = query.first()
+    if not department:
+        raise HTTPException(status_code=404, detail="Department not found")
+    return department
 
 # ========================================
 # AUTHENTICATION ENDPOINTS
@@ -158,8 +235,7 @@ def list_users(
     if workspace_id:
         query = query.filter(User.workspace_id == workspace_id)
     users = query.offset(skip).limit(limit).all()
-    
-    return users
+    return [_serialize_user(user) for user in users]
 
 @router.get("/departments/{department_id}/users")
 def list_department_users(
@@ -182,7 +258,8 @@ def list_department_users(
     query = db.query(User).filter(User.department_id == department_id)
     if workspace_id:
         query = query.filter(User.workspace_id == workspace_id)
-    return query.offset(skip).limit(limit).all()
+    users = query.offset(skip).limit(limit).all()
+    return [_serialize_user(user) for user in users]
 
 @router.get("/users/{user_id}")
 def get_user(
@@ -202,8 +279,104 @@ def get_user(
     
     if not user:
         raise HTTPException(status_code=404, detail="User account not found")
-    
-    return user
+    return _serialize_user(user)
+
+
+@router.get("/departments/{department_id}/ranks")
+def list_department_ranks(
+    department_id: UUID,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    PermissionService.require_permission(current_user, "view_department_users")
+
+    department = _resolve_department_for_user(current_user, db, department_id)
+
+    if current_user.role in (UserRole.MANAGER, UserRole.USER, UserRole.VIEWER):
+        if current_user.department_id != department.id:
+            raise HTTPException(status_code=403, detail="Permission denied: insufficient privileges")
+
+    return _extract_department_ranks(department)
+
+
+@router.post("/departments/{department_id}/ranks")
+def create_department_rank(
+    department_id: UUID,
+    data: DepartmentRankCreateSchema,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    PermissionService.require_permission(current_user, "manage_department_ranks")
+
+    department = _resolve_department_for_user(current_user, db, department_id)
+    if not _can_manage_department(current_user, department.id):
+        raise HTTPException(status_code=403, detail="Managers can only manage ranks in their own department")
+
+    rank_name = data.name.strip()
+    if not rank_name:
+        raise HTTPException(status_code=400, detail="Rank name is required")
+
+    ranks = _extract_department_ranks(department)
+    duplicate = next((rank for rank in ranks if rank["name"].lower() == rank_name.lower()), None)
+    if duplicate:
+        raise HTTPException(status_code=400, detail="Rank already exists in this department")
+
+    next_order = max([rank.get("order", 0) for rank in ranks], default=0) + 1
+    created_rank = {
+        "id": str(uuid4()),
+        "name": rank_name,
+        "order": next_order,
+    }
+    ranks.append(created_rank)
+    ranks.sort(key=lambda rank: (rank.get("order", 999999), rank.get("name", "").lower()))
+
+    meta = dict(department.meta_data or {})
+    meta["ranks"] = ranks
+    department.meta_data = meta
+    db.commit()
+
+    return created_rank
+
+
+@router.put("/users/{user_id}/rank")
+def assign_user_rank(
+    user_id: UUID,
+    data: UserRankAssignSchema,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    PermissionService.require_permission(current_user, "assign_user_rank")
+
+    department = _resolve_department_for_user(current_user, db, data.department_id)
+    if not _can_manage_department(current_user, department.id):
+        raise HTTPException(status_code=403, detail="Managers can only assign ranks in their own department")
+
+    user_query = db.query(User).filter(User.id == user_id)
+    if current_user.role != UserRole.SUPERADMIN:
+        user_query = user_query.filter(User.workspace_id == current_user.workspace_id)
+    target_user = user_query.first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if target_user.department_id != department.id:
+        raise HTTPException(status_code=400, detail="User is not assigned to this department")
+
+    rank_id = data.rank_id.strip() if data.rank_id else None
+    if rank_id:
+        ranks = _extract_department_ranks(department)
+        if not any(rank["id"] == rank_id for rank in ranks):
+            raise HTTPException(status_code=400, detail="Rank not found in this department")
+
+    user_meta = dict(target_user.meta_data or {})
+    if rank_id:
+        user_meta["department_rank_id"] = rank_id
+    else:
+        user_meta.pop("department_rank_id", None)
+    target_user.meta_data = user_meta
+    db.commit()
+    db.refresh(target_user)
+
+    return _serialize_user(target_user)
 
 @router.put("/users/{user_id}")
 def update_user(
