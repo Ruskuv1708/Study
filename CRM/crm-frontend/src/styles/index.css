@@ -51,3 +51,91 @@ h1 {
   font-size: 3.2em;
   line-height: 1.1;
 }
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+.crm-page-shell {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.crm-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.crm-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.crm-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.crm-table-scroll > table {
+  min-width: 720px;
+}
+
+.crm-inline-grid-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.crm-inline-grid-scroll > * {
+  min-width: 640px;
+}
+
+@media (max-width: 900px) {
+  h1 {
+    font-size: 2rem;
+  }
+
+  .crm-page-shell {
+    max-width: none !important;
+    padding: 16px !important;
+  }
+
+  .crm-page-header {
+    align-items: flex-start !important;
+  }
+
+  .crm-header-actions {
+    width: 100%;
+    justify-content: flex-start !important;
+  }
+
+  .crm-mobile-stack {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .crm-mobile-grid-one {
+    grid-template-columns: 1fr !important;
+  }
+}

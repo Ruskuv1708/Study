@@ -36,8 +36,21 @@ function Login() {
 
   // Minimalistic Design
   return (
-    <div style={{ display: "flex", justifyContent: "center", marginTop: "100px", fontFamily: "sans-serif" }}>
-      <form onSubmit={handleLogin} style={{ width: "300px", display: "flex", flexDirection: "column", gap: "10px" }}>
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", padding: "16px", fontFamily: "sans-serif" }}>
+      <form
+        onSubmit={handleLogin}
+        style={{
+          width: "100%",
+          maxWidth: "360px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+          padding: "20px",
+          background: "#fff",
+          borderRadius: "10px",
+          boxShadow: "0 8px 20px rgba(0,0,0,0.08)"
+        }}
+      >
         <h2>Login</h2>
         
         <input 

@@ -5,6 +5,7 @@ import { type RequestItem, type Department } from './types'
 import type { FormTemplate, FormField } from '../forms/types'
 import { ROLE_ASSIGNABLE, normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
+import useIsMobile from '../../shared/useIsMobile'
 
 const normalizeUser = (user: any) => ({
   ...user,
@@ -58,6 +59,7 @@ function RequestsPage() {
   const [rows, setRows] = useState<Array<Record<string, any>>>([])
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  const isMobile = useIsMobile()
 
   const templateFromQuery = useMemo(() => {
     const params = new URLSearchParams(location.search)
@@ -471,10 +473,10 @@ function RequestsPage() {
   }
 
   return (
-    <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "40px", fontFamily: "sans-serif" }}>
+    <div className="crm-page-shell" style={{ maxWidth: "1000px", margin: "0 auto", padding: isMobile ? "16px" : "40px", fontFamily: "sans-serif" }}>
       
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "30px" }}>
+      <div className="crm-page-header" style={{ marginBottom: "30px" }}>
         <div>
           <h1 style={{ margin: 0 }}>All Requests</h1>
           <button 
@@ -484,11 +486,11 @@ function RequestsPage() {
             ← Back to Dashboard
           </button>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="crm-header-actions" style={{ display: "flex", gap: "10px" }}>
           {roleMatches(currentUser?.role, ['SUPERADMIN','SYSTEM_ADMIN','ADMIN','MANAGER']) && (
             <button
               onClick={() => navigate('/requests/history')}
-              style={{ background: "white", color: "black", height: "40px", border: "1px solid #ccc" }}
+              style={{ background: "white", color: "black", height: "40px", border: "1px solid #ccc", width: isMobile ? '100%' : 'auto' }}
             >
               History
             </button>
@@ -496,7 +498,7 @@ function RequestsPage() {
           {canSubmitTemplates && (
             <button 
               onClick={() => setIsCreating(!isCreating)}
-              style={{ background: "black", color: "white", height: "40px" }}
+              style={{ background: "black", color: "white", height: "40px", width: isMobile ? '100%' : 'auto' }}
             >
               {isCreating ? "Cancel" : "+ New Request"}
             </button>
@@ -523,14 +525,14 @@ function RequestsPage() {
                 ))}
               </select>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ fontSize: "12px", color: "gray" }}>
                   Each row creates a request.
                 </div>
                 <button
                   type="button"
                   onClick={addRow}
-                  style={{ background: "#f0f1f6", border: "1px solid #ccd0db", padding: "6px 10px", borderRadius: "6px", cursor: "pointer" }}
+                  style={{ background: "#f0f1f6", border: "1px solid #ccd0db", padding: "6px 10px", borderRadius: "6px", cursor: "pointer", width: isMobile ? '100%' : 'auto' }}
                 >
                   + Add Row
                 </button>
@@ -620,7 +622,7 @@ function RequestsPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                style={{ background: submitting ? "#ccc" : "#1890ff", color: "white", padding: "10px", marginTop: "10px", border: "none", borderRadius: "6px", cursor: submitting ? "not-allowed" : "pointer" }}
+                style={{ background: submitting ? "#ccc" : "#1890ff", color: "white", padding: "10px", marginTop: "10px", border: "none", borderRadius: "6px", cursor: submitting ? "not-allowed" : "pointer", width: isMobile ? '100%' : 'auto' }}
               >
                 {submitting ? "Submitting..." : "Submit Requests"}
               </button>

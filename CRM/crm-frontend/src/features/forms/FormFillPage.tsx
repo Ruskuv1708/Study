@@ -5,6 +5,7 @@ import theme from '../../shared/theme'
 import type { FormTemplate, FormField } from './types'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
+import useIsMobile from '../../shared/useIsMobile'
 
 const normalizeUser = (user: any) => ({
   ...user,
@@ -33,6 +34,7 @@ function FormFillPage() {
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const isMobile = useIsMobile()
 
   const token = localStorage.getItem('crm_token')
 
@@ -183,8 +185,8 @@ function FormFillPage() {
   }
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.lg }}>
+    <div className="crm-page-shell">
+      <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.lg }}>
         <div>
           <h2 style={{ margin: 0 }}>{template.name}</h2>
           <div style={{ color: theme.colors.gray.text, fontSize: '13px' }}>
@@ -199,7 +201,8 @@ function FormFillPage() {
               border: `1px solid ${theme.colors.gray.border}`,
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             Queue
@@ -211,7 +214,8 @@ function FormFillPage() {
               border: `1px solid ${theme.colors.gray.border}`,
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             Back
@@ -231,7 +235,7 @@ function FormFillPage() {
           gap: theme.spacing.md
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: '12px', color: theme.colors.gray.text }}>
             Required fields are marked with *
           </div>
@@ -243,14 +247,15 @@ function FormFillPage() {
               border: `1px solid ${theme.colors.gray.border}`,
               padding: '8px 12px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             + Add Row
           </button>
         </div>
 
-        <div style={{
+        <div className="crm-inline-grid-scroll" style={{
           border: `1px solid ${theme.colors.gray.border}`,
           borderRadius: theme.borderRadius.lg,
           overflow: 'auto'
@@ -349,7 +354,8 @@ function FormFillPage() {
             border: 'none',
             padding: '10px 16px',
             borderRadius: theme.borderRadius.md,
-            cursor: submitting ? 'not-allowed' : 'pointer'
+            cursor: submitting ? 'not-allowed' : 'pointer',
+            width: isMobile ? '100%' : 'auto'
           }}
         >
           {submitting ? 'Submitting...' : 'Submit Rows'}

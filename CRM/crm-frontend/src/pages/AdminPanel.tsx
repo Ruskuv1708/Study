@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { ROLE_DISPLAY_NAMES, roleMatches } from '../shared/roleLabels'
+import useIsMobile from '../shared/useIsMobile'
 
 interface User {
   id: string
@@ -40,6 +41,7 @@ function AdminPanel() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
 
   const [newUser, setNewUser] = useState({
     full_name: '',
@@ -380,7 +382,7 @@ function AdminPanel() {
   const creationRoleOptions = getRoleOptionsForCreation(currentUser.role)
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div className="crm-page-shell" style={{ padding: '20px' }}>
 
   {/* Back button */}
   <button
@@ -392,7 +394,8 @@ function AdminPanel() {
       padding: '6px 12px',
       borderRadius: '6px',
       cursor: 'pointer',
-      fontSize: '13px'
+      fontSize: '13px',
+      width: isMobile ? '100%' : 'auto'
     }}
   >
     ← Back to Dashboard
@@ -404,16 +407,18 @@ function AdminPanel() {
       {/* ✅ Tenant Selector for Superadmin */}
       {roleMatches(currentUser.role, ['SUPERADMIN','SYSTEM_ADMIN']) && workspaces.length > 0 && (
         <div style={{ marginBottom: '20px', padding: '10px', background: '#f0f0f0', borderRadius: '4px' }}>
-          <label>
+          <label style={{ display: 'block' }}>
             <strong>Select Workspace:</strong>
             <select
               value={selectedWorkspace}
               onChange={(e) => setSelectedWorkspace(e.target.value)}
               style={{
-                marginLeft: '10px',
+                marginLeft: isMobile ? 0 : '10px',
+                marginTop: isMobile ? '8px' : 0,
                 padding: '6px 12px',
                 borderRadius: '4px',
-                border: '1px solid #ccc'
+                border: '1px solid #ccc',
+                width: isMobile ? '100%' : 'auto'
               }}
             >
               {workspaces.map(t => (
@@ -435,7 +440,8 @@ function AdminPanel() {
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            width: isMobile ? '100%' : 'auto'
           }}
         >
           ➕ {showCreateForm ? 'Cancel' : 'Create New User'}
@@ -544,7 +550,8 @@ function AdminPanel() {
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             Create User
@@ -557,6 +564,7 @@ function AdminPanel() {
       {filteredUsers.length === 0 ? (
         <p>No users in this workspace</p>
       ) : (
+        <div className="crm-table-scroll">
         <table style={{
           width: '100%',
           borderCollapse: 'collapse',
@@ -636,30 +644,32 @@ function AdminPanel() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {/* Departments Management */}
       <h2 style={{ marginTop: '40px' }}>Departments ({departments.length})</h2>
-      <form onSubmit={handleCreateDepartment} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+      <form onSubmit={handleCreateDepartment} className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
         <input
           placeholder="Department name"
           value={newDept.name}
           onChange={(e) => setNewDept({ ...newDept, name: e.target.value })}
           required
-          style={{ padding: '8px', flex: 1 }}
+          style={{ padding: '8px', flex: 1, width: isMobile ? '100%' : undefined }}
         />
         <input
           placeholder="Description (optional)"
           value={newDept.description}
           onChange={(e) => setNewDept({ ...newDept, description: e.target.value })}
-          style={{ padding: '8px', flex: 2 }}
+          style={{ padding: '8px', flex: 2, width: isMobile ? '100%' : undefined }}
         />
-        <button type="submit" style={{ padding: '8px 14px' }}>Add</button>
+        <button type="submit" style={{ padding: '8px 14px', width: isMobile ? '100%' : 'auto' }}>Add</button>
       </form>
 
       {departments.length === 0 ? (
         <p>No departments found</p>
       ) : (
+        <div className="crm-table-scroll">
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f0f0f0' }}>
@@ -724,6 +734,7 @@ function AdminPanel() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   )

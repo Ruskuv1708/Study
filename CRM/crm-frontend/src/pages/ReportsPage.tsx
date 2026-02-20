@@ -3,6 +3,7 @@ import axios from 'axios'
 import theme from '../shared/theme'
 import { normalizeRole, roleMatches } from '../shared/roleLabels'
 import { getWorkspaceParams } from '../shared/workspace'
+import useIsMobile from '../shared/useIsMobile'
 
 type ReportFile = {
   id: string
@@ -150,6 +151,7 @@ function ReportsPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const uploadInputRef = useRef<HTMLInputElement>(null)
+  const isMobile = useIsMobile()
 
   const readToken = () => localStorage.getItem('crm_token')
   const handleUnauthorized = () => {
@@ -516,16 +518,16 @@ function ReportsPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: theme.spacing.md }}>
+    <div className="crm-page-shell" style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
+      <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: theme.spacing.md }}>
         <div>
           <h2 style={{ margin: 0 }}>Reports Library</h2>
           <div style={{ color: theme.colors.gray.text, fontSize: '13px' }}>
             Generate, upload, browse, download, and delete stored report files.
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm, alignItems: 'flex-end' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '12px', color: theme.colors.gray.text }}>Generation period:</span>
             <select
               value={generationPeriod}
@@ -534,7 +536,7 @@ function ReportsPage() {
                 border: `1px solid ${theme.colors.gray.border}`,
                 borderRadius: theme.borderRadius.sm,
                 padding: '6px 8px',
-                minWidth: '150px',
+                minWidth: isMobile ? '100%' : '150px',
               }}
             >
               {PERIOD_OPTIONS.map(option => (
@@ -566,7 +568,7 @@ function ReportsPage() {
               </>
             )}
           </div>
-          <div style={{ display: 'flex', gap: theme.spacing.sm }}>
+          <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', gap: theme.spacing.sm }}>
             <button
               onClick={() => handleGenerateAndStore('requests')}
               disabled={generatingType !== null}
@@ -577,6 +579,7 @@ function ReportsPage() {
                 padding: '8px 12px',
                 borderRadius: theme.borderRadius.md,
                 cursor: generatingType ? 'not-allowed' : 'pointer',
+                width: isMobile ? '100%' : 'auto',
               }}
             >
               {generatingType === 'requests' ? 'Generating...' : 'Generate Requests'}
@@ -591,6 +594,7 @@ function ReportsPage() {
                 padding: '8px 12px',
                 borderRadius: theme.borderRadius.md,
                 cursor: generatingType ? 'not-allowed' : 'pointer',
+                width: isMobile ? '100%' : 'auto',
               }}
             >
               {generatingType === 'users' ? 'Generating...' : 'Generate Users'}
@@ -604,6 +608,7 @@ function ReportsPage() {
                 padding: '8px 12px',
                 borderRadius: theme.borderRadius.md,
                 cursor: uploading ? 'not-allowed' : 'pointer',
+                width: isMobile ? '100%' : 'auto',
               }}
             >
               {uploading ? 'Uploading...' : 'Upload File'}
@@ -633,9 +638,9 @@ function ReportsPage() {
 
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '220px 1fr 300px',
+        gridTemplateColumns: isMobile ? '1fr' : '220px 1fr 300px',
         gap: theme.spacing.md,
-        minHeight: '460px',
+        minHeight: isMobile ? 'auto' : '460px',
       }}>
         <div style={{
           background: '#fff',
@@ -646,6 +651,7 @@ function ReportsPage() {
           flexDirection: 'column',
           gap: theme.spacing.sm,
           overflow: 'hidden',
+          minHeight: isMobile ? '260px' : 'auto',
         }}>
           <div>
             <div style={{ fontSize: '12px', fontWeight: 700, color: theme.colors.gray.text, marginBottom: '6px' }}>
@@ -695,6 +701,7 @@ function ReportsPage() {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
+          minHeight: isMobile ? '300px' : 'auto',
         }}>
           <div style={{ padding: theme.spacing.md, borderBottom: `1px solid ${theme.colors.gray.border}` }}>
             <input
@@ -712,7 +719,7 @@ function ReportsPage() {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 120px 180px',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 120px 180px',
             padding: theme.spacing.md,
             borderBottom: `1px solid ${theme.colors.gray.border}`,
             fontSize: '12px',
@@ -720,8 +727,8 @@ function ReportsPage() {
             color: theme.colors.gray.text,
           }}>
             <div>Name</div>
-            <div>Size</div>
-            <div>Stored</div>
+            {!isMobile && <div>Size</div>}
+            {!isMobile && <div>Stored</div>}
           </div>
 
           <div style={{ overflow: 'auto' }}>
@@ -736,7 +743,7 @@ function ReportsPage() {
                 style={{
                   width: '100%',
                   display: 'grid',
-                  gridTemplateColumns: '1fr 120px 180px',
+                  gridTemplateColumns: isMobile ? '1fr' : '1fr 120px 180px',
                   padding: theme.spacing.md,
                   border: 'none',
                   borderBottom: `1px solid ${theme.colors.gray.border}`,
@@ -745,11 +752,20 @@ function ReportsPage() {
                   textAlign: 'left',
                 }}
               >
-                <div style={{ fontWeight: 600 }}>{file.filename}</div>
-                <div style={{ color: theme.colors.gray.text }}>{formatBytes(file.file_size)}</div>
-                <div style={{ color: theme.colors.gray.text }}>
-                  {file.created_at ? new Date(file.created_at).toLocaleString() : '—'}
+                <div style={{ fontWeight: 600 }}>
+                  {file.filename}
+                  {isMobile && (
+                    <div style={{ color: theme.colors.gray.text, fontSize: '12px', marginTop: '4px' }}>
+                      {formatBytes(file.file_size)} • {file.created_at ? new Date(file.created_at).toLocaleString() : '—'}
+                    </div>
+                  )}
                 </div>
+                {!isMobile && <div style={{ color: theme.colors.gray.text }}>{formatBytes(file.file_size)}</div>}
+                {!isMobile && (
+                  <div style={{ color: theme.colors.gray.text }}>
+                    {file.created_at ? new Date(file.created_at).toLocaleString() : '—'}
+                  </div>
+                )}
               </button>
             ))}
           </div>
@@ -798,6 +814,7 @@ function ReportsPage() {
                     padding: '8px 10px',
                     borderRadius: theme.borderRadius.sm,
                     cursor: downloadingId ? 'not-allowed' : 'pointer',
+                    width: isMobile ? '100%' : 'auto',
                   }}
                 >
                   {downloadingId === selectedFile.id ? 'Downloading...' : 'Download'}
@@ -812,6 +829,7 @@ function ReportsPage() {
                     padding: '8px 10px',
                     borderRadius: theme.borderRadius.sm,
                     cursor: deletingId ? 'not-allowed' : 'pointer',
+                    width: isMobile ? '100%' : 'auto',
                   }}
                 >
                   {deletingId === selectedFile.id ? 'Deleting...' : 'Delete'}

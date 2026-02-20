@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { type Department } from './types'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
+import useIsMobile from '../../shared/useIsMobile'
 
 const ROLE_ORDER = ['SUPERADMIN','SYSTEM_ADMIN','ADMIN','MANAGER','USER','VIEWER']
 
@@ -19,6 +20,7 @@ function DepartmentsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [department, setDepartment] = useState<Department | null>(null)
   const [loading, setLoading] = useState(true)
+  const isMobile = useIsMobile()
 
   const fetchData = async () => {
     const token = localStorage.getItem('crm_token')
@@ -114,8 +116,8 @@ function DepartmentsPage() {
     : department ? [department] : []
 
   return (
-    <div style={{ maxWidth: "900px", margin: "0 auto", padding: "40px", fontFamily: "sans-serif" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "30px" }}>
+    <div className="crm-page-shell" style={{ maxWidth: "900px", margin: "0 auto", padding: isMobile ? "16px" : "40px", fontFamily: "sans-serif" }}>
+      <div className="crm-page-header" style={{ marginBottom: "30px" }}>
         <div>
           <h1 style={{ margin: 0 }}>Departments &amp; Rankings</h1>
           <button 
@@ -151,6 +153,7 @@ function DepartmentsPage() {
             {deptUsers.length === 0 ? (
               <p style={{ color: "#888", marginTop: "10px" }}>No users assigned yet.</p>
             ) : (
+              <div className="crm-table-scroll">
               <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "10px" }}>
                 <thead>
                   <tr>
@@ -171,6 +174,7 @@ function DepartmentsPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </section>
         )

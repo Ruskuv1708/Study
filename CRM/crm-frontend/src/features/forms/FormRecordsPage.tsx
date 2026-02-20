@@ -5,6 +5,7 @@ import theme from '../../shared/theme'
 import { normalizeRole, roleMatches } from '../../shared/roleLabels'
 import { getWorkspaceParams } from '../../shared/workspace'
 import type { FormTemplate, FormRecord } from './types'
+import useIsMobile from '../../shared/useIsMobile'
 
 const normalizeUser = (user: any) => ({
   ...user,
@@ -19,6 +20,7 @@ function FormRecordsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const isMobile = useIsMobile()
 
   const token = localStorage.getItem('crm_token')
 
@@ -149,8 +151,8 @@ function FormRecordsPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div className="crm-page-shell" style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.lg }}>
+      <div className={isMobile ? 'crm-mobile-stack' : ''} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ margin: 0 }}>{template.name} - Records</h2>
           <div style={{ color: theme.colors.gray.text, fontSize: '13px' }}>
@@ -166,7 +168,8 @@ function FormRecordsPage() {
                 border: `1px solid ${theme.colors.gray.border}`,
                 padding: '8px 14px',
                 borderRadius: theme.borderRadius.md,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                width: isMobile ? '100%' : 'auto'
               }}
             >
               Export
@@ -179,7 +182,8 @@ function FormRecordsPage() {
               border: `1px solid ${theme.colors.gray.border}`,
               padding: '8px 14px',
               borderRadius: theme.borderRadius.md,
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: isMobile ? '100%' : 'auto'
             }}
           >
             Back
@@ -187,7 +191,7 @@ function FormRecordsPage() {
         </div>
       </div>
 
-      <div style={{
+      <div className="crm-inline-grid-scroll" style={{
         background: '#fff',
         borderRadius: theme.borderRadius.lg,
         boxShadow: theme.shadows.sm,
